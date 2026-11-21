@@ -5,15 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { z } from "zod";
 import { authClient } from "@/lib/auth-client";
+import { safeNext } from "@/lib/safe-url";
 import { AuthForm } from "./auth-form";
 
 const email = z.string().trim().email("Enter a valid email address");
 const password = z.string().min(8, "Password must be at least 8 characters");
-
-/** Only same-site relative paths are allowed as post-login targets. */
-export function safeNext(raw: string | null): string {
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
-}
 
 const linkClass = "text-sm text-muted-foreground underline underline-offset-4";
 
