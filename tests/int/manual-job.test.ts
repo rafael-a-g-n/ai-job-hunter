@@ -87,6 +87,16 @@ describe("createManualJob", () => {
     expect(await db.job.count()).toBe(1);
   });
 
+  it("embeds the existing job on a repeat paste when it has no embedding yet", async () => {
+    const first = await createManualJob(A, false, { text: TEXT }, noAi);
+    await db.$executeRaw`UPDATE "Job" SET "embedding" = NULL WHERE "id" = ${first.id}`;
+    await createManualJob(A, false, { text: TEXT }, noAi);
+    const [row] = await db.$queryRaw<
+      { ok: boolean }[]
+    >`SELECT ("embedding" IS NOT NULL) AS ok FROM "Job" WHERE "id" = ${first.id}`;
+    expect(row.ok).toBe(true);
+  });
+
   it("gives each user their own copy of the same posting", async () => {
     const a = await createManualJob(A, false, { text: TEXT }, noAi);
     const b = await createManualJob(B, false, { text: TEXT }, noAi);

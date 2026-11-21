@@ -78,10 +78,14 @@ export async function createManualJob(
         },
       });
     } catch (e) {
-      // The same user pasting the same job twice gets the existing row back.
+      // The same user pasting the same job twice gets the existing row back, embedded if an
+      // earlier attempt left it without a vector.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
         const existing = await db.job.findUnique({ where: { dedupeHash } });
-        if (existing && existing.ownerId === userId) return existing;
+        if (existing && existing.ownerId === userId) {
+          await db.$executeRaw`UPDATE "Job" SET "embedding" = ${toPgVector(vector)}::vector WHERE "id" = ${existing.id} AND "embedding" IS NULL`;
+          return existing;
+        }
       }
       throw e;
     }
