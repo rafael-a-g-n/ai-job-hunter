@@ -18,6 +18,11 @@ export default function globalSetup() {
   assertTestDatabase(TEST_DATABASE_URL);
   execSync("npx prisma migrate deploy", {
     stdio: "inherit",
-    env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },
+    // prisma.config.ts prefers DIRECT_DATABASE_URL: pin both, so .env.local can never redirect it.
+    env: {
+      ...process.env,
+      DATABASE_URL: TEST_DATABASE_URL,
+      DIRECT_DATABASE_URL: TEST_DATABASE_URL,
+    },
   });
 }

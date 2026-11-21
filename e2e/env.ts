@@ -7,6 +7,8 @@ export const E2E_DATABASE_URL =
 /** Everything the app and the setup scripts need; all providers are fakes. Never the dev database. */
 export const E2E_ENV: Record<string, string> = {
   DATABASE_URL: E2E_DATABASE_URL,
+  // prisma.config.ts prefers this for migrations: pin it too, or a value in .env.local would win.
+  DIRECT_DATABASE_URL: E2E_DATABASE_URL,
   APP_URL: `http://localhost:${E2E_PORT}`,
   BETTER_AUTH_SECRET: "e2e-only-secret-not-for-real-use-0123456789",
   AI_PROVIDER: "mock",

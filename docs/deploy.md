@@ -4,11 +4,11 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
 
 ## 1. Neon
 
-1. Create a project and a database. Copy the **pooled** connection string; it becomes `DATABASE_URL`.
+1. Create a project and a database. Copy the **pooled** connection string; it becomes `DATABASE_URL` (used by the app). Copy the **direct** (unpooled) connection string too; it becomes `DIRECT_DATABASE_URL`, which the Prisma CLI uses for migrations (`prisma.config.ts`; it falls back to `DATABASE_URL` when unset).
 2. Enable pgvector: run `CREATE EXTENSION IF NOT EXISTS vector;` in the Neon SQL editor. (The initial migration also creates the extension; doing it first confirms your plan supports it.)
 3. Apply migrations from your machine against the Neon URL:
    ```bash
-   DATABASE_URL="<neon url>" npx prisma migrate deploy
+   DIRECT_DATABASE_URL="<neon direct url>" npx prisma migrate deploy
    ```
    Do not use `migrate dev` or `migrate reset` against this database.
 
@@ -32,12 +32,13 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
    ```
    prisma migrate deploy && next build
    ```
-   This applies pending migrations on every deploy, so `DATABASE_URL` must be available at build time.
+   This applies pending migrations on every deploy, so `DIRECT_DATABASE_URL` (or `DATABASE_URL`) must be available at build time.
 4. Environment variables (Production). Every key is validated in `src/lib/env.ts`:
 
    | Variable | Value |
    |---|---|
    | `DATABASE_URL` | Neon pooled URL |
+   | `DIRECT_DATABASE_URL` | Neon direct (unpooled) URL, for migrations |
    | `APP_URL` | Your production URL, for example `https://your-app.vercel.app` (no trailing slash) |
    | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` (at least 32 chars) |
    | `AI_PROVIDER` | `anthropic` |
