@@ -207,3 +207,25 @@ export async function getMatchForJob(userId: string, jobId: string): Promise<Mat
     explanation: match.explanation,
   };
 }
+
+/** Scored matches already cached for a CV, best first. Makes no AI call and uses no usage. */
+export async function listCachedMatches(
+  userId: string,
+  cvId: string,
+  limit: number,
+): Promise<MatchView[]> {
+  const rows = await db.matchResult.findMany({
+    where: { cvId, cv: { userId }, score: { not: null }, job: visibleJobWhere(userId) },
+    include: { job: { select: jobListSelect } },
+    orderBy: [{ score: "desc" }, { vectorScore: "desc" }],
+    take: limit,
+  });
+  return rows.map((m) => ({
+    job: m.job,
+    vectorScore: m.vectorScore,
+    score: m.score,
+    matchedSkills: m.matchedSkills,
+    gaps: m.gaps,
+    explanation: m.explanation,
+  }));
+}

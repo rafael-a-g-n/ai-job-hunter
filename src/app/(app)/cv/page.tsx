@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { UploadForm } from "@/components/cv/upload-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getPreferredLanguage } from "@/server/account/preferences";
 import { requireUser } from "@/server/auth/session";
 import { listCvs } from "@/server/cv/queries";
 
@@ -39,11 +40,18 @@ async function CvList() {
   );
 }
 
+async function CvUpload() {
+  const user = await requireUser();
+  return <UploadForm defaultLanguage={await getPreferredLanguage(user.id)} />;
+}
+
 export default function CvPage() {
   return (
     <main className="mx-auto grid w-full max-w-3xl gap-6 p-6">
       <h1 className="text-xl font-semibold">Your CV</h1>
-      <UploadForm />
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+        <CvUpload />
+      </Suspense>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading your CVs…</p>}>
         <CvList />
       </Suspense>

@@ -14,10 +14,19 @@ import {
 import { DEFAULT_LETTER_OPTIONS, LetterOptions } from "./letter-options";
 import { useLetterGeneration, type LetterFormOptions } from "./use-letter-generation";
 
-export function WriteLetterDialog({ jobId }: { jobId: string }) {
+export function WriteLetterDialog({
+  jobId,
+  defaultLanguage = "en",
+}: {
+  jobId: string;
+  defaultLanguage?: LetterFormOptions["language"];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState<LetterFormOptions>(DEFAULT_LETTER_OPTIONS);
+  const [options, setOptions] = useState<LetterFormOptions>({
+    ...DEFAULT_LETTER_OPTIONS,
+    language: defaultLanguage,
+  });
   const { text, isLoading, error, stop, generate } = useLetterGeneration({
     onSaved: (id) => router.push(`/letters/${id}`),
   });

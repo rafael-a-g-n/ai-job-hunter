@@ -15,11 +15,11 @@ const TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
-export function UploadForm() {
+export function UploadForm({ defaultLanguage = "en" }: { defaultLanguage?: string }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState(defaultLanguage);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failedCvId, setFailedCvId] = useState<string | null>(null);

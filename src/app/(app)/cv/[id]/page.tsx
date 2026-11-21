@@ -5,6 +5,7 @@ import { AnalyzeButton } from "@/components/cv/analyze-button";
 import { ProfileEditor } from "@/components/cv/profile-editor";
 import { CvReport } from "@/components/cv/report";
 import { NotFoundError } from "@/lib/errors";
+import { getPreferredLanguage } from "@/server/account/preferences";
 import { requireUser } from "@/server/auth/session";
 import { getCv } from "@/server/cv/queries";
 import { CvAnalysis, CvProfile } from "@/server/cv/schemas";
@@ -16,6 +17,7 @@ async function CvDetail({ params }: { params: Promise<{ id: string }> }) {
     throw e;
   });
 
+  const language = await getPreferredLanguage(user.id);
   const profile = CvProfile.safeParse(cv.profile);
   const analysis = CvAnalysis.safeParse(cv.analysis);
 
@@ -32,12 +34,12 @@ async function CvDetail({ params }: { params: Promise<{ id: string }> }) {
         <>
           <CvReport analysis={analysis.data} />
           <ProfileEditor key={cv.updatedAt.toISOString()} cvId={cv.id} initial={profile.data} />
-          <AnalyzeButton cvId={cv.id} label="Re-analyse CV" />
+          <AnalyzeButton cvId={cv.id} label="Re-analyse CV" defaultLanguage={language} />
         </>
       ) : cv.status === "UPLOADED" ? (
         <div className="grid gap-3">
           <p className="text-sm">This CV has not been analysed yet.</p>
-          <AnalyzeButton cvId={cv.id} />
+          <AnalyzeButton cvId={cv.id} defaultLanguage={language} />
         </div>
       ) : cv.status === "ANALYZING" ? (
         <p className="text-sm">Analysis in progress. Refresh in a moment.</p>

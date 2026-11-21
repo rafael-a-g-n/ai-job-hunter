@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotFoundError } from "@/lib/errors";
 import { safeExternalUrl } from "@/lib/safe-url";
+import { getPreferredLanguage } from "@/server/account/preferences";
 import { requireUser } from "@/server/auth/session";
 import { isJobSaved } from "@/server/jobs/saved";
 import { getJob } from "@/server/jobs/search";
@@ -22,9 +23,10 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
     if (e instanceof NotFoundError) notFound();
     throw e;
   });
-  const [saved, match] = await Promise.all([
+  const [saved, match, language] = await Promise.all([
     isJobSaved(user.id, job.id),
     getMatchForJob(user.id, job.id),
+    getPreferredLanguage(user.id),
   ]);
   const now = new Date();
   const jobUrl = safeExternalUrl(job.url);
@@ -78,7 +80,7 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
         </Card>
       )}
       <div>
-        <WriteLetterDialog jobId={job.id} />
+        <WriteLetterDialog jobId={job.id} defaultLanguage={language} />
       </div>
 
       <Card>

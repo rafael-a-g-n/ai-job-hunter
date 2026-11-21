@@ -52,6 +52,8 @@ model User {
   updatedAt     DateTime  @default(now()) @updatedAt
   isDemo        Boolean   @default(false)
   demoExpiresAt DateTime?
+  // Default AI output language: "en" | "pt".
+  preferredLanguage String @default("en")
 
   sessions     Session[]
   accounts     Account[]

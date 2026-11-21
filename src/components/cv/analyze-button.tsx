@@ -6,9 +6,17 @@ import { analyzeCvAction } from "@/app/(app)/cv/actions";
 import { Button } from "@/components/ui/button";
 import { LanguageSelect } from "./language-select";
 
-export function AnalyzeButton({ cvId, label = "Analyse CV" }: { cvId: string; label?: string }) {
+export function AnalyzeButton({
+  cvId,
+  label = "Analyse CV",
+  defaultLanguage = "en",
+}: {
+  cvId: string;
+  label?: string;
+  defaultLanguage?: string;
+}) {
   const router = useRouter();
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState(defaultLanguage);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
