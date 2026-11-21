@@ -80,6 +80,19 @@ describe("uploadCv", () => {
     expect((await db.cv.findUniqueOrThrow({ where: { id: second.id } })).isActive).toBe(true);
   });
 
+  it("keeps the previous CV active when a new upload fails", async () => {
+    const first = await uploadCv(UID, file("sample.pdf", PDF_MIME));
+    const failed = await uploadCv(UID, file("scanned.pdf", PDF_MIME));
+    expect(failed.status).toBe("FAILED");
+    expect(failed.isActive).toBe(false);
+    expect((await db.cv.findUniqueOrThrow({ where: { id: first.id } })).isActive).toBe(true);
+  });
+
+  it("makes a failed first upload active", async () => {
+    const failed = await uploadCv(UID, file("scanned.pdf", PDF_MIME));
+    expect(failed.isActive).toBe(true);
+  });
+
   it("does not deactivate another user's CV", async () => {
     await db.user.create({ data: { id: "other", name: "O", email: "o@example.com" } });
     const theirs = await uploadCv("other", file("sample.pdf", PDF_MIME));

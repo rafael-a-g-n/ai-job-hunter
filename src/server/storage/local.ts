@@ -8,7 +8,7 @@ export class LocalBlobStore implements BlobStore {
   private readonly root: string;
 
   constructor(root = path.join(process.cwd(), ".data", "blobs")) {
-    this.root = path.resolve(root);
+    this.root = path.resolve(/*turbopackIgnore: true*/ root);
   }
 
   private resolve(key: string): string {

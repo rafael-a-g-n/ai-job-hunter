@@ -46,7 +46,13 @@ export async function uploadCv(userId: string, file: CvFile): Promise<Cv> {
     const readable = text.length >= MIN_CV_TEXT_CHARS;
 
     return await db.$transaction(async (tx) => {
-      await tx.cv.updateMany({ where: { userId, isActive: true }, data: { isActive: false } });
+      // A failed upload only becomes active when it is the user's first CV; otherwise the
+      // previous active CV stays active and the failed one is stored inactive.
+      const hasOther = (await tx.cv.count({ where: { userId } })) > 0;
+      const isActive = readable || !hasOther;
+      if (isActive) {
+        await tx.cv.updateMany({ where: { userId, isActive: true }, data: { isActive: false } });
+      }
       return tx.cv.create({
         data: {
           userId,
@@ -57,7 +63,7 @@ export async function uploadCv(userId: string, file: CvFile): Promise<Cv> {
           rawText: text,
           status: readable ? "UPLOADED" : "FAILED",
           failureReason: readable ? null : UNREADABLE_CV_MESSAGE,
-          isActive: true,
+          isActive,
         },
       });
     });
