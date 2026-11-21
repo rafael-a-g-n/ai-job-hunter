@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { postedAgo, sourceLabel } from "@/components/jobs/posted-ago";
+import { DeleteJobButton } from "@/components/jobs/delete-job-button";
 import { SaveButton } from "@/components/jobs/save-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotFoundError } from "@/lib/errors";
+import { safeExternalUrl } from "@/lib/safe-url";
 import { requireUser } from "@/server/auth/session";
 import { isJobSaved } from "@/server/jobs/saved";
 import { getJob } from "@/server/jobs/search";
@@ -18,6 +20,8 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   });
   const saved = await isJobSaved(user.id, job.id);
   const now = new Date();
+  const jobUrl = safeExternalUrl(job.url);
+  const canDelete = job.source === "MANUAL" && job.ownerId === user.id;
 
   return (
     <div className="grid gap-6">
@@ -38,11 +42,14 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
               <span>{postedAgo(job.postedAt, now)}</span>
             </div>
           </div>
-          <SaveButton jobId={job.id} initialSaved={saved} />
+          <div className="flex items-start gap-2">
+            {canDelete && <DeleteJobButton jobId={job.id} />}
+            <SaveButton jobId={job.id} initialSaved={saved} />
+          </div>
         </div>
-        {job.url && (
+        {jobUrl && (
           <a
-            href={job.url}
+            href={jobUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm underline underline-offset-4"

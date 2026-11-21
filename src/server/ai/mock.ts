@@ -3,11 +3,19 @@ import { simulateReadableStream } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 
 /** Add a key here (and its fixture below) when a later task needs a mocked AI call. */
-export type MockKey = "test.echo" | "cv.analysis";
+export type MockKey = "test.echo" | "cv.analysis" | "jobs.normalize";
 
 /** Deterministic outputs used when AI_PROVIDER=mock. Strings stream as-is, objects as JSON. */
 export const MOCK_FIXTURES: Record<MockKey, unknown> = {
   "test.echo": { message: "hello from the mock" },
+  "jobs.normalize": {
+    title: "Frontend Engineer",
+    company: "Lisbon Labs",
+    location: "Lisbon, Portugal",
+    remote: true,
+    description:
+      "We are looking for a Frontend Engineer to build our customer-facing web app with React and TypeScript. You will work with design and product, write tests and improve performance. Hybrid or fully remote within Europe.",
+  },
   "cv.analysis": {
     profile: {
       fullName: "Ana Silva",
