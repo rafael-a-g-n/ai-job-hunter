@@ -17,7 +17,9 @@ export async function getOptionalUser(): Promise<SessionUser | null> {
 export async function getUserFromHeaders(requestHeaders: Headers): Promise<SessionUser | null> {
   const session = await auth.api.getSession({ headers: requestHeaders });
   if (!session) return null;
-  const { id, email, isDemo } = session.user;
+  const { id, email, isDemo, demoExpiresAt } = session.user;
+  // A demo account stops working at its expiry, even if cleanup has not deleted it yet.
+  if (isDemo && (!demoExpiresAt || new Date(demoExpiresAt).getTime() < Date.now())) return null;
   return { id, email, isDemo: Boolean(isDemo) };
 }
 

@@ -15,9 +15,10 @@ export async function DemoBanner() {
     select: { demoExpiresAt: true },
   });
   const hours = hoursLeft(row?.demoExpiresAt ?? null);
+  const remaining = hours > 0 ? `expires in ${hours}h` : "expired";
   return (
     <div role="status" className="bg-muted px-4 py-2 text-center text-sm">
-      Demo account · expires in {hours}h ·{" "}
+      Demo account · {remaining} ·{" "}
       <Link href="/sign-up" className="font-medium underline underline-offset-4">
         Create a real account
       </Link>

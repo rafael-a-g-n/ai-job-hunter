@@ -73,22 +73,41 @@ async function cloneTemplate(userId: string, now: Date, blobKeys: string[]): Pro
   });
   await db.$executeRaw`UPDATE "Cv" SET "embedding" = ${embedding}::vector WHERE "id" = ${cv.id}`;
 
+  const scoredByHash = new Map((t.matches ?? []).map((m) => [m.jobDedupeHash, m]));
   const jobs = await db.job.findMany({
-    where: { dedupeHash: { in: t.savedJobDedupeHashes }, expiresAt: { gt: now } },
+    where: {
+      dedupeHash: { in: [...new Set([...t.savedJobDedupeHashes, ...scoredByHash.keys()])] },
+      expiresAt: { gt: now },
+    },
     select: { id: true, dedupeHash: true },
   });
   if (jobs.length === 0) return;
-  await db.savedJob.createMany({ data: jobs.map((j) => ({ userId, jobId: j.id })) });
+  const saved = new Set(t.savedJobDedupeHashes);
+  const savedJobs = jobs.filter((j) => saved.has(j.dedupeHash));
+  await db.savedJob.createMany({ data: savedJobs.map((j) => ({ userId, jobId: j.id })) });
 
+  // Matches for the saved jobs and every pre-scored job; vectorScore comes from the embeddings.
+  const matchJobs = jobs.filter((j) => saved.has(j.dedupeHash) || scoredByHash.has(j.dedupeHash));
+  const hashById = new Map(matchJobs.map((j) => [j.id, j.dedupeHash]));
   const sims = await db.$queryRaw<{ id: string; sim: number }[]>`
     SELECT j."id", (1 - (j."embedding" <=> c."embedding"))::float8 AS "sim"
     FROM "Job" j, "Cv" c
-    WHERE c."id" = ${cv.id} AND j."id" IN (${Prisma.join(jobs.map((j) => j.id))})
+    WHERE c."id" = ${cv.id} AND j."id" IN (${Prisma.join(matchJobs.map((j) => j.id))})
       AND j."embedding" IS NOT NULL AND c."embedding" IS NOT NULL`;
   if (sims.length > 0) {
-    // The template carries no AI scores, so `score` stays null and the first re-rank fills it in.
     await db.matchResult.createMany({
-      data: sims.map((s) => ({ cvId: cv.id, jobId: s.id, vectorScore: s.sim })),
+      data: sims.map((s) => {
+        const m = scoredByHash.get(hashById.get(s.id) ?? "");
+        return {
+          cvId: cv.id,
+          jobId: s.id,
+          vectorScore: s.sim,
+          score: m?.score ?? null,
+          matchedSkills: m?.matchedSkills ?? [],
+          gaps: m?.gaps ?? [],
+          explanation: m?.explanation ?? null,
+        };
+      }),
     });
   }
 

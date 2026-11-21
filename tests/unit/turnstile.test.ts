@@ -57,6 +57,23 @@ describe("verifyTurnstile", () => {
     err.mockRestore();
   });
 
+  it("aborts after 5 s and fails closed", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    vi.stubGlobal(
+      "fetch",
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal!.addEventListener("abort", () => reject(init.signal!.reason));
+        }),
+    );
+    const pending = verifyTurnstile("tok", "ip");
+    controller.abort(new DOMException("timed out", "TimeoutError"));
+    expect(await pending).toBe(false);
+    expect(timeout).toHaveBeenCalledWith(5000);
+    timeout.mockRestore();
+  });
+
   it("is false for an empty token", async () => {
     vi.stubGlobal("fetch", vi.fn());
     expect(await verifyTurnstile("", "ip")).toBe(false);

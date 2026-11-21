@@ -14,6 +14,19 @@ export const DemoTemplate = z
       blob: z.string().min(1),
     }),
     savedJobDedupeHashes: z.array(z.string().min(1)).length(3),
+    /** Pre-generated AI scores, so a demo account shows real match results with no AI call.
+     * Covers the best-matching jobs, saved or not; jobs missing from the database are skipped. */
+    matches: z
+      .array(
+        z.object({
+          jobDedupeHash: z.string().min(1),
+          score: z.number().int().min(0).max(100),
+          matchedSkills: z.array(z.string()),
+          gaps: z.array(z.string()),
+          explanation: z.string(),
+        }),
+      )
+      .optional(),
     letter: z.object({
       jobDedupeHash: z.string().min(1),
       tone: z.enum(Tone),

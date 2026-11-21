@@ -117,6 +117,78 @@
     "526c9cd74b83e65534d451c27fe46d25fef559921c38ddf5590e0f9faab43f05",
     "53a62388b03a5f08ce4d71fd827e88269c515bc68c8a5a63e42f3ce8c13357a9"
   ],
+  "matches": [
+    {
+      "jobDedupeHash": "1869c9ce8bd394a4d95b80fc3963378e52b874298bca8fc8d341cc6dd2c17cf3",
+      "score": 88,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "526c9cd74b83e65534d451c27fe46d25fef559921c38ddf5590e0f9faab43f05",
+      "score": 82,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "53a62388b03a5f08ce4d71fd827e88269c515bc68c8a5a63e42f3ce8c13357a9",
+      "score": 76,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "e2fc3516b0809fdf1495cf96126edd0eab434a45ed67dffa122f30d58b1510d6",
+      "score": 70,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "fae9ecf8f50c9bde74116ed9d9d206147539f5bc3c3340355d33c5f1f1695f8f",
+      "score": 64,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "c065e739e728c3f7d8dd64dc04e0b7b99da3a648894a76baba046f3bb35646cf",
+      "score": 58,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "4c36f4a98b938b3950f3409f682ad3ee5d6c0363c60f4b451a8b4e38ce68d664",
+      "score": 52,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "e246c37afe3dd7ee6dda34d9ca5064ec9e5b96c9e440c3312528456f2851bc7e",
+      "score": 46,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "2b515cc1ef4543dc7be78cbffe5a43ceefbddff13ab8c820f483ac7a14ae29b1",
+      "score": 40,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    },
+    {
+      "jobDedupeHash": "733d5eabf9795ba707062f50c3f64b9819fa815080b0b8069fdd21641a83beed",
+      "score": 34,
+      "matchedSkills": ["React", "TypeScript"],
+      "gaps": ["GraphQL"],
+      "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
+    }
+  ],
   "letter": {
     "jobDedupeHash": "1869c9ce8bd394a4d95b80fc3963378e52b874298bca8fc8d341cc6dd2c17cf3",
     "tone": "NEUTRAL",

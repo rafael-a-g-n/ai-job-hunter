@@ -6,6 +6,7 @@ import { getUserFromHeaders } from "@/server/auth/session";
 import { analyzeCv } from "@/server/cv/analyze";
 import { getCv } from "@/server/cv/queries";
 import { cleanupExpiredDemoUsers } from "@/server/demo/cleanup";
+import { findMatches } from "@/server/matching/match";
 import { createDemoUser } from "@/server/demo/create-demo";
 import { seedJobs } from "@/server/demo/seed-jobs";
 import { verifyTurnstile } from "@/server/demo/turnstile";
@@ -56,10 +57,26 @@ describe("createDemoUser", () => {
 
     const saved = await db.savedJob.count({ where: { userId } });
     expect(saved).toBeGreaterThanOrEqual(1);
-    expect(await db.matchResult.count({ where: { cvId: cv.id } })).toBe(saved);
+    expect(await db.matchResult.count({ where: { cvId: cv.id } })).toBeGreaterThanOrEqual(saved);
     const letter = await db.coverLetter.findFirstOrThrow({ where: { userId } });
     expect(letter.cvId).toBe(cv.id);
     expect(letter.content.length).toBeGreaterThan(0);
+  });
+
+  it("pre-fills matches with AI scores, so findMatches needs no AI call or usage", async () => {
+    const { userId } = await createDemoUser("1.1.1.1");
+    const cv = await db.cv.findFirstOrThrow({ where: { userId } });
+    const stored = await db.matchResult.findMany({ where: { cvId: cv.id } });
+    expect(stored.length).toBeGreaterThanOrEqual(1);
+    for (const m of stored) {
+      expect(m.score).not.toBeNull();
+      expect(m.explanation).toBeTruthy();
+      expect(m.matchedSkills.length).toBeGreaterThan(0);
+    }
+    const views = await findMatches(userId, true);
+    expect(views.filter((v) => v.score !== null)).toHaveLength(stored.length);
+    expect(await db.aiCall.count()).toBe(0);
+    expect(await db.usageCounter.count({ where: { userId, action: "MATCH_RERANK" } })).toBe(0);
   });
 
   it("keeps demo users isolated from each other", async () => {
@@ -161,6 +178,18 @@ describe("POST /api/demo", () => {
     const user = await getUserFromHeaders(new Headers({ cookie }));
     expect(user).toMatchObject({ id: created.userId, isDemo: true });
     expect(user?.email).toMatch(/^demo-.+@demo\.local$/);
+  });
+
+  it("stops authenticating the demo user once the account has expired", async () => {
+    const res = await POST(request({ turnstileToken: "ok" }));
+    const cookie = res.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0])
+      .join("; ");
+    const headers = new Headers({ cookie });
+    expect(await getUserFromHeaders(headers)).not.toBeNull();
+    await db.user.updateMany({ data: { demoExpiresAt: new Date(Date.now() - 1000) } });
+    expect(await getUserFromHeaders(headers)).toBeNull();
   });
 
   it("answers 429 once the IP has used its 3 demos", async () => {

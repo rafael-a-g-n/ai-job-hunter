@@ -6,8 +6,8 @@
  * Run it by hand with real keys (AI_PROVIDER=anthropic, EMBEDDINGS_PROVIDER=voyage in
  * .env.local) to replace the committed mock output with real AI output. With the fakes it
  * reproduces the committed file. It reads tests/fixtures/cv/sample.pdf, analyses it, takes the
- * three best-matching jobs (from the database when it has embedded jobs, else from the seed
- * set), writes one cover letter for the best one, and writes the JSON. It writes nothing to the
+ * ten best-matching jobs (the best three are saved) (from the database when it has embedded jobs, else from the seed
+ * set), scores them with the re-rank prompt, writes one cover letter for the best one, and writes the JSON. It writes nothing to the
  * database and uses no daily limits.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -18,6 +18,10 @@ config({ path: ".env.local", quiet: true });
 config({ quiet: true });
 
 const ROOT = process.cwd();
+// One re-rank batch (the live batch size): the demo CV starts with scores for its 10 best jobs, so
+// the first match request needs no AI call. The best 3 of them are the saved jobs.
+const MATCH_COUNT = 10;
+const SAVED_COUNT = 3;
 const noDb = { record: async () => {}, assertBudget: async () => {} };
 
 type Candidate = { dedupeHash: string; title: string; company: string; description: string };
@@ -63,6 +67,8 @@ async function main() {
   const { streamAiText } = await import("../src/server/ai/stream");
   const { getEmbedder } = await import("../src/server/embeddings/embedder");
   const { buildLetterPrompt } = await import("../src/server/letters/prompts");
+  const { rerankPrompt, rerankSystem } = await import("../src/server/matching/prompts");
+  const { RerankResult } = await import("../src/server/matching/schemas");
   const { DemoTemplate } = await import("../src/server/demo/template-schema");
 
   const file = readFileSync(path.join(ROOT, "tests/fixtures/cv/sample.pdf"));
@@ -81,8 +87,35 @@ async function main() {
   );
 
   const [vector] = await getEmbedder().embed([profileToText(profile)], "query");
-  let top = await topFromDb(vector, 3);
-  if (top.length < 3) top = await topFromSeed(vector, 3);
+  let top = await topFromDb(vector, MATCH_COUNT);
+  if (top.length < MATCH_COUNT) top = await topFromSeed(vector, MATCH_COUNT);
+
+  // Same prompt and schema as the live re-rank; the dedupe hash stands in for the job id.
+  const rerank = await generateStructured(
+    {
+      purpose: "demo.template.matches",
+      model: "fast",
+      schema: RerankResult,
+      system: rerankSystem(),
+      prompt: rerankPrompt(
+        profileToText(profile),
+        top.map((j) => ({ ...j, id: j.dedupeHash })),
+      ),
+      mockKey: "matching.rerank",
+    },
+    noDb,
+  );
+  const matches = top.map((j) => {
+    const r = rerank.results.find((x) => x.jobId === j.dedupeHash);
+    if (!r) throw new Error(`The re-rank returned no result for ${j.title}`);
+    return {
+      jobDedupeHash: j.dedupeHash,
+      score: r.score,
+      matchedSkills: r.matchedSkills,
+      gaps: r.gaps,
+      explanation: r.explanation,
+    };
+  });
 
   const options = { tone: "NEUTRAL", language: "en", length: "MEDIUM" } as const;
   const { system, prompt } = buildLetterPrompt(profile, top[0], options);
@@ -100,13 +133,17 @@ async function main() {
 
   const template = DemoTemplate.parse({
     cv: { fileName: "sample.pdf", rawText, profile, analysis, blob: file.toString("base64") },
-    savedJobDedupeHashes: top.map((j) => j.dedupeHash),
+    savedJobDedupeHashes: top.slice(0, SAVED_COUNT).map((j) => j.dedupeHash),
+    matches,
     letter: { jobDedupeHash: top[0].dedupeHash, ...options, content },
   });
   const out = path.join(ROOT, "src/server/demo/template-data.json");
   writeFileSync(out, `${JSON.stringify(template, null, 2)}\n`);
   console.log(
-    `Wrote ${out}. Saved jobs: ${top.map((j) => `${j.title} (${j.company})`).join("; ")}`,
+    `Wrote ${out}. Saved jobs: ${top
+      .slice(0, SAVED_COUNT)
+      .map((j) => `${j.title} (${j.company})`)
+      .join("; ")}`,
   );
 }
 
