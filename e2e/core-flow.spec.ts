@@ -43,7 +43,14 @@ test("upload a CV, see matches, write and edit a letter, paste a job", async ({
   await expect(editor).toHaveValue(/Dear Hiring Manager/);
   const edited = "Dear Hiring Manager, this sentence was edited in the e2e test.";
   await editor.fill(edited);
-  await expect(page.getByText("Saved", { exact: true })).toBeVisible({ timeout: 10_000 });
+  // Prove the debounced autosave (not the unmount save): reload until the server returns the edit.
+  const letterUrl = page.url();
+  await expect(async () => {
+    await page.goto(letterUrl);
+    await expect(page.getByRole("textbox", { name: "Cover letter" })).toHaveValue(edited, {
+      timeout: 1_000,
+    });
+  }).toPass({ timeout: 15_000 });
 
   // It appears in the list, with the edit.
   await page.goto("/letters");

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mailLink, PASSWORD, signOut, signUpVerified } from "./helpers";
+import { mailLink, PASSWORD, signOut, signUp, signUpVerified, uniqueEmail } from "./helpers";
 
 test("sign up, verify by email, sign out, reset the password and sign in with it", async ({
   page,
@@ -17,7 +17,7 @@ test("sign up, verify by email, sign out, reset the password and sign in with it
 
   const newPassword = `${PASSWORD}-new`;
   // The latest mail to this address is now the reset link (the verification mail came first).
-  await page.goto(await mailLink(request, email));
+  await page.goto(await mailLink(request, email, "reset-password"));
   await expect(page).toHaveURL(/\/reset-password\?token=/);
   await page.getByLabel("New password").fill(newPassword);
   await page.getByLabel("Confirm password").fill(newPassword);
@@ -34,4 +34,19 @@ test("sign up, verify by email, sign out, reset the password and sign in with it
   await page.getByLabel("Password").fill(newPassword);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test("an unverified user cannot sign in", async ({ page }) => {
+  const email = uniqueEmail("unverified");
+  await signUp(page, email);
+
+  await page.goto("/sign-in");
+  await page.waitForLoadState("networkidle"); // let the form hydrate before typing into it
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "verify" })).toHaveText(
+    "Please verify your email before signing in.",
+  );
+  await expect(page).toHaveURL(/\/sign-in$/);
 });

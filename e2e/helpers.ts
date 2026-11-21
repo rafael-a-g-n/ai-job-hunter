@@ -6,19 +6,27 @@ export function uniqueEmail(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@e2e.test`;
 }
 
-/** Waits for the console mailer to "send" a message to `to` and returns the link in its text. */
-export async function mailLink(request: APIRequestContext, to: string): Promise<string> {
+/**
+ * Waits for the console mailer to "send" a message to `to` whose link path contains `kind`
+ * (`verify-email` or `reset-password`) and returns that link.
+ */
+export async function mailLink(
+  request: APIRequestContext,
+  to: string,
+  kind: "verify-email" | "reset-password",
+): Promise<string> {
   let link: string | undefined;
   await expect
     .poll(
       async () => {
         const res = await request.get(`/api/test/mail?to=${encodeURIComponent(to)}`);
         const body = (await res.json()) as { messages: { text: string }[] };
-        const last = body.messages.at(-1);
-        link = last?.text.match(/https?:\/\/\S+/)?.[0];
+        link = body.messages
+          .map((m) => m.text.match(/https?:\/\/\S+/)?.[0])
+          .findLast((l) => l?.includes(kind));
         return link;
       },
-      { message: `mail to ${to}`, timeout: 15_000 },
+      { message: `${kind} mail to ${to}`, timeout: 15_000 },
     )
     .toBeTruthy();
   return link as string;
@@ -41,7 +49,7 @@ export async function signUpVerified(
 ): Promise<string> {
   const email = uniqueEmail(prefix);
   await signUp(page, email);
-  await page.goto(await mailLink(request, email));
+  await page.goto(await mailLink(request, email, "verify-email"));
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   return email;
