@@ -50,7 +50,7 @@ function voyage(responses: ((init?: RequestInit) => Response | Promise<Response>
     const next = responses.length > 1 ? responses.shift()! : responses[0];
     return next(init);
   });
-  const sleep = vi.fn(async (_ms: number) => {});
+  const sleep = vi.fn<(ms: number) => Promise<void>>(async () => {});
   const embedder = new VoyageEmbedder("key", fetchFn as unknown as typeof fetch, { sleep });
   return { fetchFn, sleep, embedder };
 }
