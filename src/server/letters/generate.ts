@@ -39,6 +39,7 @@ export async function streamLetter(
     );
   };
 
+  const abort = new AbortController();
   let result: Awaited<ReturnType<typeof streamAiText>>;
   try {
     result = await streamAiText({
@@ -48,6 +49,7 @@ export async function streamLetter(
       system,
       prompt,
       mockKey: "letters.generate",
+      abortSignal: abort.signal,
     });
   } catch (e) {
     await refund();
@@ -58,6 +60,7 @@ export async function streamLetter(
   const encoder = new TextEncoder();
   const reader = result.fullStream.getReader();
   let text = "";
+  let cancelled = false;
 
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -72,6 +75,7 @@ export async function streamLetter(
             return;
           }
         }
+        if (cancelled) return;
         const content = text.trim().slice(0, MAX_LETTER_CHARS);
         if (!content) throw new Error("The model returned an empty letter.");
         await db.coverLetter.create({
@@ -86,14 +90,22 @@ export async function streamLetter(
             content,
           },
         });
+        if (cancelled) {
+          // Aborted while saving: no letter on abort, and the usage is already refunded.
+          await db.coverLetter.deleteMany({ where: { id } });
+          return;
+        }
         controller.close();
       } catch (e) {
+        if (cancelled) return;
         console.error("[letters] generation failed", describeError(e));
         await refund();
         controller.error(e);
       }
     },
     async cancel() {
+      cancelled = true;
+      abort.abort();
       await refund();
       await reader.cancel().catch(() => {});
     },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { deleteLetterAction, updateLetterAction } from "@/app/(app)/letters/actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,22 +34,46 @@ export function LetterEditor({
     onSaved: (id) => router.push(`/letters/${id}`),
   });
 
+  const contentRef = useRef(initialContent);
+  const discard = useRef(false);
+
+  /** Saves right away if there are unsaved edits; resolves to false when the save failed. */
+  const flush = useCallback(async (): Promise<boolean> => {
+    const pending = contentRef.current;
+    if (pending === lastSaved.current) return true;
+    setSaveState("saving");
+    const result = await updateLetterAction(letterId, pending);
+    if (result.ok) {
+      lastSaved.current = pending;
+      setSaveState("saved");
+      setMessage(null);
+      return true;
+    }
+    setSaveState("error");
+    setMessage(result.error);
+    return false;
+  }, [letterId]);
+
   useEffect(() => {
     if (content === lastSaved.current) return;
     setSaveState("saving");
-    const timer = setTimeout(async () => {
-      const result = await updateLetterAction(letterId, content);
-      if (result.ok) {
-        lastSaved.current = content;
-        setSaveState("saved");
-        setMessage(null);
-      } else {
-        setSaveState("error");
-        setMessage(result.error);
-      }
-    }, AUTOSAVE_MS);
+    const timer = setTimeout(() => void flush(), AUTOSAVE_MS);
     return () => clearTimeout(timer);
-  }, [content, letterId]);
+  }, [content, flush]);
+
+  // Leaving the page (client navigation or unmount) must not drop a pending edit.
+  useEffect(() => {
+    const save = () => {
+      if (!discard.current && contentRef.current !== lastSaved.current) {
+        void updateLetterAction(letterId, contentRef.current);
+      }
+    };
+    window.addEventListener("pagehide", save);
+    return () => {
+      window.removeEventListener("pagehide", save);
+      save();
+    };
+  }, [letterId]);
 
   const status = { saved: "Saved", saving: "Saving...", error: "Not saved" }[saveState];
 
@@ -60,7 +84,10 @@ export function LetterEditor({
         value={content}
         maxLength={MAX_CHARS}
         rows={18}
-        onChange={(e) => setContent(e.target.value)}
+        onChange={(e) => {
+          contentRef.current = e.target.value;
+          setContent(e.target.value);
+        }}
       />
       <div className="flex flex-wrap items-center gap-2">
         <span aria-live="polite" className="mr-auto text-xs text-muted-foreground">
@@ -85,7 +112,9 @@ export function LetterEditor({
           variant="outline"
           size="sm"
           disabled={isLoading}
-          onClick={() => void generate(jobId, options)}
+          onClick={async () => {
+            if (await flush()) void generate(jobId, options);
+          }}
         >
           {isLoading ? "Writing..." : "Regenerate"}
         </Button>
@@ -95,8 +124,13 @@ export function LetterEditor({
           disabled={deleting}
           onClick={() =>
             startDelete(async () => {
+              // The letter is going away, so skip the unmount save.
+              discard.current = true;
               const result = await deleteLetterAction(letterId);
-              if (!result.ok) setMessage(result.error);
+              if (!result.ok) {
+                discard.current = false;
+                setMessage(result.error);
+              }
             })
           }
         >

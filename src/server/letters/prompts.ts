@@ -13,6 +13,11 @@ export const DESCRIPTION_CHARS = 4000;
 
 export type LetterOptions = { tone: Tone; language: "en" | "pt"; length: LetterLength };
 
+/** Removes our delimiter tags from untrusted text so it cannot close a block early. */
+function defang(text: string): string {
+  return text.replace(/<[/]?[ ]*(profile|job)(?![a-z])[^>]*>/gi, "");
+}
+
 export function buildLetterPrompt(
   profile: CvProfile,
   job: Pick<Job, "title" | "company" | "description">,
@@ -33,15 +38,15 @@ export function buildLetterPrompt(
   ].join(" ");
 
   const prompt = [
-    `Candidate name: ${profile.fullName}`,
     "<profile>",
-    profileToText(profile),
+    `Candidate name: ${defang(profile.fullName)}`,
+    defang(profileToText(profile)),
     "</profile>",
     "",
-    `Job title: ${job.title}`,
-    `Company: ${job.company}`,
     "<job>",
-    job.description.slice(0, DESCRIPTION_CHARS),
+    `Job title: ${defang(job.title)}`,
+    `Company: ${defang(job.company)}`,
+    defang(job.description.slice(0, DESCRIPTION_CHARS)),
     "</job>",
     "",
     "Write the cover letter now.",

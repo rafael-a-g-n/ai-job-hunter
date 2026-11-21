@@ -12,6 +12,8 @@ export type StreamAiTextOptions = {
   system: string;
   prompt: string;
   mockKey: MockKey;
+  /** Aborting records the call as not ok (no usage is known) and stops the provider request. */
+  abortSignal?: AbortSignal;
 };
 
 /** Streams text. Usage is logged once the stream finishes (ok=false if it errored). */
@@ -27,6 +29,7 @@ export async function streamAiText(opts: StreamAiTextOptions, deps: AiDeps = {})
     system: opts.system,
     prompt: opts.prompt,
     maxRetries: 0,
+    abortSignal: opts.abortSignal,
     onFinish: async ({ totalUsage }) => {
       await safeRecord(record, {
         ...base,
@@ -34,6 +37,15 @@ export async function streamAiText(opts: StreamAiTextOptions, deps: AiDeps = {})
         outputTokens: totalUsage.outputTokens ?? 0,
         durationMs: Date.now() - started,
         ok: true,
+      });
+    },
+    onAbort: async () => {
+      await safeRecord(record, {
+        ...base,
+        inputTokens: 0,
+        outputTokens: 0,
+        durationMs: Date.now() - started,
+        ok: false,
       });
     },
     onError: async ({ error }) => {

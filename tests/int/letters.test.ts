@@ -9,17 +9,19 @@ vi.mock("@/server/auth/session", () => ({
   getUserFromHeaders: async () => session.user,
 }));
 
-const streamControl = vi.hoisted(() => ({ fail: false }));
+const streamControl = vi.hoisted(() => ({ mode: "real" as "real" | "error" | "empty" }));
 vi.mock("@/server/ai/stream", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/ai/stream")>();
   return {
     ...actual,
     streamAiText: async (...args: Parameters<typeof actual.streamAiText>) => {
-      if (!streamControl.fail) return actual.streamAiText(...args);
+      if (streamControl.mode === "real") return actual.streamAiText(...args);
       const fullStream = new ReadableStream({
         start(c) {
-          c.enqueue({ type: "text-delta", id: "t", text: "Dear" });
-          c.enqueue({ type: "error", error: new Error("provider exploded") });
+          if (streamControl.mode === "error") {
+            c.enqueue({ type: "text-delta", id: "t", text: "Dear" });
+            c.enqueue({ type: "error", error: new Error("provider exploded") });
+          }
           c.close();
         },
       });
@@ -111,17 +113,68 @@ describe("POST /api/letters/stream", () => {
   it("refunds the usage and saves nothing when the stream errors", async () => {
     await makeCv(A);
     const job = await makeJob();
-    streamControl.fail = true;
+    streamControl.mode = "error";
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const res = await POST(request(job.id));
       await expect(res.text()).rejects.toThrow();
     } finally {
-      streamControl.fail = false;
+      streamControl.mode = "real";
       spy.mockRestore();
     }
     expect(await db.coverLetter.count()).toBe(0);
     expect(await usageCount()).toBe(0);
+  });
+
+  it("refunds the usage and saves nothing when the model returns an empty letter", async () => {
+    await makeCv(A);
+    const job = await makeJob();
+    streamControl.mode = "empty";
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await POST(request(job.id));
+      await expect(res.text()).rejects.toThrow();
+    } finally {
+      streamControl.mode = "real";
+      spy.mockRestore();
+    }
+    expect(await db.coverLetter.count()).toBe(0);
+    expect(await usageCount()).toBe(0);
+  });
+
+  it("refunds the usage when saving the letter fails", async () => {
+    await makeCv(A);
+    const job = await makeJob();
+    const create = vi
+      .spyOn(db.coverLetter, "create")
+      .mockRejectedValueOnce(new Error("db down") as never);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await POST(request(job.id));
+      await expect(res.text()).rejects.toThrow();
+    } finally {
+      create.mockRestore();
+      spy.mockRestore();
+    }
+    expect(await db.coverLetter.count()).toBe(0);
+    expect(await usageCount()).toBe(0);
+  });
+
+  it("saves no letter, refunds the usage and records the AI call when the client aborts", async () => {
+    await makeCv(A);
+    const job = await makeJob();
+    const res = await POST(request(job.id));
+    const reader = res.body!.getReader();
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+    await reader.cancel();
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(await db.coverLetter.count()).toBe(0);
+    expect(await usageCount()).toBe(0);
+    const calls = await db.aiCall.findMany({ where: { purpose: "letters.generate" } });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].ok).toBe(false);
   });
 
   it("returns 401 without a session", async () => {
