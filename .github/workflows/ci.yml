@@ -8,6 +8,18 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Placeholder, non-secret values so `next build` can load src/lib/env.ts. CI-only; all providers are fakes.
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/build_placeholder
+      APP_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-only-dummy-secret-not-for-real-use-0123456789
+      AI_PROVIDER: mock
+      EMBEDDINGS_PROVIDER: fake
+      STORAGE_PROVIDER: local
+      MAIL_PROVIDER: console
+      EMAIL_FROM: "AI Job Hunter <noreply@example.com>"
+      CRON_SECRET: ci-only-dummy-cron-secret
+      TURNSTILE_BYPASS: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
