@@ -17,3 +17,15 @@ export async function resolveDeps(
     deps.assertBudget ?? (await import("@/server/limits/usage")).assertGlobalBudget;
   return { record, assertBudget };
 }
+
+/** Recording is best effort: a failed insert is logged and never changes the AI outcome. */
+export async function safeRecord(
+  record: RecordAiCall,
+  call: Parameters<RecordAiCall>[0],
+): Promise<void> {
+  try {
+    await record(call);
+  } catch (err) {
+    console.error(`[ai] failed to record AiCall (${call.purpose}, ${call.model})`, err);
+  }
+}

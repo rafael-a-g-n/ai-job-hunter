@@ -2,8 +2,9 @@ export class AppError extends Error {
   constructor(
     public readonly code: string,
     public readonly userMessage: string,
+    options?: { cause?: unknown },
   ) {
-    super(userMessage);
+    super(userMessage, options);
     this.name = "AppError";
   }
 }

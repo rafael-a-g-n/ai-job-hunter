@@ -7,8 +7,9 @@ import {
 } from "ai";
 import type { ZodType } from "zod";
 import { AppError } from "@/lib/errors";
+import type { MockKey } from "./mock";
 import type { ModelTier } from "./models";
-import { resolveDeps, type AiDeps } from "./deps";
+import { resolveDeps, safeRecord, type AiDeps } from "./deps";
 import { getModel } from "./provider";
 
 export type GenerateStructuredOptions<T> = {
@@ -18,7 +19,7 @@ export type GenerateStructuredOptions<T> = {
   schema: ZodType<T>;
   system: string;
   prompt: string;
-  mockKey: string;
+  mockKey: MockKey;
   /** Per attempt. Default 60000. */
   timeoutMs?: number;
 };
@@ -74,11 +75,13 @@ export async function generateStructured<T>(
   const model = deps.model ?? getModel(opts.model, opts.mockKey);
   const timeoutMs = opts.timeoutMs ?? 60_000;
 
+  let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const started = Date.now();
     const base = { purpose: opts.purpose, userId: opts.userId, model: opts.model };
+    let result: Awaited<ReturnType<typeof generateText>>;
     try {
-      const result = await withTimeout(timeoutMs, (abortSignal) =>
+      result = await withTimeout(timeoutMs, (abortSignal) =>
         generateText({
           model,
           output: Output.object({ schema: opts.schema }),
@@ -88,23 +91,28 @@ export async function generateStructured<T>(
           maxRetries: 0,
         }),
       );
-      await record({
-        ...base,
-        inputTokens: result.usage.inputTokens ?? 0,
-        outputTokens: result.usage.outputTokens ?? 0,
-        durationMs: Date.now() - started,
-        ok: true,
-      });
-      return result.output as T;
     } catch (err) {
-      await record({
+      lastError = err;
+      await safeRecord(record, {
         ...base,
         ...failedUsage(err),
         durationMs: Date.now() - started,
         ok: false,
       });
-      if (!isRetryable(err) || attempt === MAX_ATTEMPTS) break;
+      if (!isRetryable(err)) break;
+      continue;
     }
+    await safeRecord(record, {
+      ...base,
+      inputTokens: result.usage.inputTokens ?? 0,
+      outputTokens: result.usage.outputTokens ?? 0,
+      durationMs: Date.now() - started,
+      ok: true,
+    });
+    return result.output as T;
   }
-  throw new AppError("AI_FAILED", "The AI service failed. Please try again.");
+  console.error(`[ai] ${opts.purpose} (${opts.model}) failed`, lastError);
+  throw new AppError("AI_FAILED", "The AI service failed. Please try again.", {
+    cause: lastError,
+  });
 }

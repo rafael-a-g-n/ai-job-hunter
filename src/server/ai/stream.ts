@@ -1,6 +1,7 @@
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { streamText } from "ai";
-import { resolveDeps, type AiDeps } from "./deps";
+import { resolveDeps, safeRecord, type AiDeps } from "./deps";
+import type { MockKey } from "./mock";
 import type { ModelTier } from "./models";
 import { getModel } from "./provider";
 
@@ -10,7 +11,7 @@ export type StreamAiTextOptions = {
   model: ModelTier;
   system: string;
   prompt: string;
-  mockKey: string;
+  mockKey: MockKey;
 };
 
 /** Streams text. Usage is logged once the stream finishes (ok=false if it errored). */
@@ -27,7 +28,7 @@ export async function streamAiText(opts: StreamAiTextOptions, deps: AiDeps = {})
     prompt: opts.prompt,
     maxRetries: 0,
     onFinish: async ({ totalUsage }) => {
-      await record({
+      await safeRecord(record, {
         ...base,
         inputTokens: totalUsage.inputTokens ?? 0,
         outputTokens: totalUsage.outputTokens ?? 0,
@@ -35,8 +36,9 @@ export async function streamAiText(opts: StreamAiTextOptions, deps: AiDeps = {})
         ok: true,
       });
     },
-    onError: async () => {
-      await record({
+    onError: async ({ error }) => {
+      console.error(`[ai] stream ${opts.purpose} (${opts.model}) failed`, error);
+      await safeRecord(record, {
         ...base,
         inputTokens: 0,
         outputTokens: 0,

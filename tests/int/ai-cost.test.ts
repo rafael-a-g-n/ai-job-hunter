@@ -25,7 +25,7 @@ const opts = {
   schema,
   system: "s",
   prompt: "p",
-  mockKey: "test.echo",
+  mockKey: "test.echo" as const,
 };
 
 beforeEach(async () => {
@@ -68,7 +68,7 @@ describe("AiCall logging", () => {
       model: "fast",
       system: "s",
       prompt: "p",
-      mockKey: "test.echo",
+      mockKey: "test.echo" as const,
     });
     expect(await result.text).toContain("hello from the mock");
     await new Promise((r) => setTimeout(r, 50));

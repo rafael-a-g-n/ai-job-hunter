@@ -32,7 +32,7 @@ function setup(...texts: string[]) {
     schema,
     system: "sys",
     prompt: "p",
-    mockKey: "test.echo",
+    mockKey: "test.echo" as const,
   };
   return { model, calls, deps, opts };
 }
@@ -77,7 +77,7 @@ describe("generateStructured", () => {
         schema,
         system: "s",
         prompt: "p",
-        mockKey: "test.echo",
+        mockKey: "test.echo" as const,
         timeoutMs: 20,
       },
       { model, record: async (c) => void calls.push(c), assertBudget: async () => {} },
@@ -103,5 +103,48 @@ describe("generateStructured", () => {
       { ...deps, model: mockModel("test.echo") },
     );
     expect(out).toEqual({ message: "hello from the mock" });
+  });
+
+  it("a failing recorder on the success path neither retries nor fails the call", async () => {
+    const { model, deps, opts } = setup('{"name":"Ada","age":36}', '{"name":"Bob","age":1}');
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const record = vi.fn(async () => {
+      throw new Error("db down");
+    });
+    expect(await generateStructured(opts, { ...deps, record })).toEqual({ name: "Ada", age: 36 });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(record).toHaveBeenCalledOnce();
+    spy.mockRestore();
+  });
+
+  it("a failing recorder does not mask AI_FAILED", async () => {
+    const { deps, opts } = setup("nope", "nope");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const record = async () => {
+      throw new Error("db down");
+    };
+    await expect(generateStructured(opts, { ...deps, record })).rejects.toMatchObject({
+      code: "AI_FAILED",
+    });
+    spy.mockRestore();
+  });
+
+  it("does not retry a provider error and keeps it as the cause", async () => {
+    const providerError = new Error("401 invalid x-api-key");
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw providerError;
+      },
+    });
+    const { calls, deps, opts } = setup();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const err = await generateStructured(opts, { ...deps, model }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect(err).toMatchObject({ code: "AI_FAILED" });
+    expect((err as AppError).cause).toBe(providerError);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(calls.map((c) => c.ok)).toEqual([false]);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

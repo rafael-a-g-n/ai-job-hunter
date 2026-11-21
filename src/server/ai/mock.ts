@@ -15,11 +15,11 @@ const usage = {
   outputTokens: { total: 20, text: 20, reasoning: 0 },
 };
 
-export function mockModel(mockKey: string): LanguageModelV4 {
+export function mockModel(mockKey: MockKey): LanguageModelV4 {
   if (!Object.hasOwn(MOCK_FIXTURES, mockKey)) {
     throw new Error(`No mock fixture for "${mockKey}". Add it to MOCK_FIXTURES.`);
   }
-  const fixture = MOCK_FIXTURES[mockKey as MockKey];
+  const fixture = MOCK_FIXTURES[mockKey];
   const text = typeof fixture === "string" ? fixture : JSON.stringify(fixture);
   const finishReason = { unified: "stop", raw: "stop" } as const;
 
