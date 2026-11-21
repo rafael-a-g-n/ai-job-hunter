@@ -4,6 +4,7 @@ import { AppError, LimitExceededError } from "@/lib/errors";
 import { describeError } from "@/server/ai/deps";
 import { generateStructured, type AiDeps } from "@/server/ai/structured";
 import { getActiveCv, getCv } from "@/server/cv/queries";
+import { isTemplateCv } from "@/server/demo/template";
 import { CvProfile, profileToText } from "@/server/cv/schemas";
 import { jobListSelect, visibleJobWhere, type JobListItem } from "@/server/jobs/search";
 import { consumeUsage, refundUsage } from "@/server/limits/usage";
@@ -121,8 +122,11 @@ export async function findMatches(
   });
   const cached = new Map<string, Cached>(cachedRows.map((m) => [m.jobId, m]));
 
+  // A demo user still on the cloned template CV sees the pre-scored matches instantly, with no
+  // AI call: re-ranking resumes once they analyse their own CV.
+  const demoTemplate = isDemo && isTemplateCv(cv);
   const batch = rows.slice(0, RERANK_BATCH).filter((r) => cached.get(r.id)?.score == null);
-  if (batch.length > 0) {
+  if (batch.length > 0 && !demoTemplate) {
     let consumed = false;
     try {
       await consumeUsage(userId, "MATCH_RERANK", isDemo);

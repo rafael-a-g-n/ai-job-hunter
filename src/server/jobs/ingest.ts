@@ -1,6 +1,7 @@
 import { Prisma, type JobSource } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { cleanupExpiredDemoUsers } from "@/server/demo/cleanup";
+import { templateJobHashes } from "@/server/demo/template";
 import { getEmbedder } from "@/server/embeddings/embedder";
 import { toPgVector } from "@/server/embeddings/vector";
 import { computeDedupeHash, getEnabledAdapters } from "./sources";
@@ -232,8 +233,14 @@ export async function runIngest(
       : { source: adapters[i].source, fetched: 0, inserted: 0, error: errorMessage(r.reason) },
   );
 
+  // Jobs the demo template points at never expire, so every new demo gets its full content.
+  const demoHashes = templateJobHashes();
+  await db.job.updateMany({
+    where: { dedupeHash: { in: demoHashes }, source: { not: "MANUAL" } },
+    data: { expiresAt: new Date(now.getTime() + JOB_TTL_MS) },
+  });
   const { count: expired } = await db.job.deleteMany({
-    where: { source: { not: "MANUAL" }, expiresAt: { lt: now } },
+    where: { source: { not: "MANUAL" }, expiresAt: { lt: now }, dedupeHash: { notIn: demoHashes } },
   });
   const demoUsersDeleted = await cleanupExpiredDemoUsers(now);
   return { sources, expired, demoUsersDeleted };

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { JobSource } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { POST } from "@/app/api/cron/ingest/route";
+import { templateJobHashes } from "@/server/demo/template";
 import { runIngest } from "@/server/jobs/ingest";
 import type { JobSourceAdapter, NormalizedJob } from "@/server/jobs/sources";
 
@@ -248,6 +249,26 @@ describe("runIngest", () => {
     const report = await runIngest({ adapters: [] });
     expect(report.expired).toBe(1);
     expect((await db.job.findMany()).map((j) => j.dedupeHash)).toEqual(["old-manual"]);
+  });
+
+  it("never expires a job the demo template points at, and extends its expiry", async () => {
+    const [hash] = templateJobHashes();
+    const old = new Date(Date.now() - 31 * DAY);
+    await db.job.create({
+      data: {
+        source: "ARBEITNOW",
+        dedupeHash: hash,
+        title: "Demo job",
+        company: "C",
+        description: "d",
+        fetchedAt: old,
+        expiresAt: new Date(old.getTime() + 30 * DAY),
+      },
+    });
+    const report = await runIngest({ adapters: [] });
+    expect(report.expired).toBe(0);
+    const kept = await db.job.findUniqueOrThrow({ where: { dedupeHash: hash } });
+    expect(kept.expiresAt.getTime()).toBeGreaterThan(Date.now() + 29 * DAY);
   });
 
   it("does not keep a fetched job that is already past its 30 day expiry", async () => {

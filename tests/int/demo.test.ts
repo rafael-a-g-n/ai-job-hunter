@@ -79,6 +79,29 @@ describe("createDemoUser", () => {
     expect(await db.usageCounter.count({ where: { userId, action: "MATCH_RERANK" } })).toBe(0);
   });
 
+  it("does not re-rank uncached jobs while the demo user is on the template CV", async () => {
+    const { userId } = await createDemoUser("1.1.1.1");
+    const cv = await db.cv.findFirstOrThrow({ where: { userId } });
+    // Some template matches are gone (e.g. a job was re-scored away): still no AI call.
+    const some = await db.matchResult.findMany({ where: { cvId: cv.id }, take: 2 });
+    await db.matchResult.deleteMany({ where: { id: { in: some.map((m) => m.id) } } });
+    const views = await findMatches(userId, true);
+    expect(views.length).toBeGreaterThan(0);
+    expect(views.some((v) => v.score === null)).toBe(true);
+    expect(await db.aiCall.count()).toBe(0);
+    expect(await db.usageCounter.count({ where: { userId, action: "MATCH_RERANK" } })).toBe(0);
+  });
+
+  it("re-ranks once the demo user's active CV is their own", async () => {
+    const { userId } = await createDemoUser("1.1.1.1");
+    const cv = await db.cv.findFirstOrThrow({ where: { userId } });
+    await db.cv.update({ where: { id: cv.id }, data: { rawText: "My own CV text" } });
+    await db.matchResult.deleteMany({ where: { cvId: cv.id } });
+    const views = await findMatches(userId, true);
+    expect(views.some((v) => v.score !== null)).toBe(true);
+    expect(await db.usageCounter.count({ where: { userId, action: "MATCH_RERANK" } })).toBe(1);
+  });
+
   it("keeps demo users isolated from each other", async () => {
     const a = await createDemoUser("1.1.1.1");
     const b = await createDemoUser("1.1.1.1");
