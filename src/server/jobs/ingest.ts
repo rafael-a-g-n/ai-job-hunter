@@ -1,4 +1,4 @@
-import type { JobSource } from "@/generated/prisma/client";
+import { Prisma, type JobSource } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { cleanupExpiredDemoUsers } from "@/server/demo/cleanup";
 import { getEmbedder } from "@/server/embeddings/embedder";
@@ -33,10 +33,11 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
 async function fetchWithDeadline(
   adapter: JobSourceAdapter,
   timeoutMs: number,
+  baseFetch: typeof fetch,
 ): Promise<NormalizedJob[]> {
   const deadline = AbortSignal.timeout(timeoutMs);
   const fetchFn: typeof fetch = (input, init) =>
-    fetch(input, {
+    baseFetch(input, {
       ...init,
       signal: init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline,
     });
@@ -63,7 +64,26 @@ function embeddingText(j: {
   return [j.title, j.company, j.location ?? "", j.description.slice(0, 2000)].join("\n");
 }
 
-async function ingestJobs(jobs: NormalizedJob[], now: Date): Promise<number> {
+const EMBED_REPAIR_CAP = 500;
+const EMBED_CHUNK = 100;
+const REFRESH_CHUNK = 1000;
+
+/** Bulk-refreshes fetchedAt/expiresAt of known jobs; rows whose new expiry is already past are left alone. */
+async function refreshExisting(
+  rows: { hash: string; expiresAt: Date }[],
+  now: Date,
+): Promise<void> {
+  const live = rows.filter((r) => r.expiresAt > now);
+  for (let i = 0; i < live.length; i += REFRESH_CHUNK) {
+    const values = live
+      .slice(i, i + REFRESH_CHUNK)
+      .map((r) => Prisma.sql`(${r.hash}, ${r.expiresAt.toISOString()})`);
+    await db.$executeRaw`UPDATE "Job" AS j SET "fetchedAt" = ${now.toISOString()}::timestamp, "expiresAt" = v.e::timestamp FROM (VALUES ${Prisma.join(values)}) AS v(h, e) WHERE j."dedupeHash" = v.h`;
+  }
+}
+
+/** Inserts new jobs (without embeddings), refreshes known ones. Returns rows actually created. */
+async function upsertJobs(jobs: NormalizedJob[], now: Date): Promise<number> {
   const byHash = new Map<string, NormalizedJob>();
   for (const j of jobs) byHash.set(computeDedupeHash(j), j);
   const hashes = [...byHash.keys()];
@@ -75,14 +95,13 @@ async function ingestJobs(jobs: NormalizedJob[], now: Date): Promise<number> {
     ).map((j) => j.dedupeHash),
   );
 
-  for (const hash of existing) {
-    const j = byHash.get(hash);
-    if (!j) continue;
-    await db.job.update({
-      where: { dedupeHash: hash },
-      data: { fetchedAt: now, expiresAt: expiryFor(j.postedAt, now) },
-    });
-  }
+  await refreshExisting(
+    [...existing].map((hash) => ({
+      hash,
+      expiresAt: expiryFor(byHash.get(hash)?.postedAt ?? null, now),
+    })),
+    now,
+  );
 
   const fresh = [...byHash].filter(
     ([hash, j]) => !existing.has(hash) && expiryFor(j.postedAt, now) > now,
@@ -108,14 +127,35 @@ async function ingestJobs(jobs: NormalizedJob[], now: Date): Promise<number> {
       expiresAt: expiryFor(j.postedAt, now),
     })),
     skipDuplicates: true,
-    select: { id: true, title: true, company: true, location: true, description: true },
+    select: { id: true },
   });
-
-  const vectors = await getEmbedder().embed(created.map(embeddingText), "document");
-  for (const [i, job] of created.entries()) {
-    await db.$executeRaw`UPDATE "Job" SET "embedding" = ${toPgVector(vectors[i])}::vector WHERE "id" = ${job.id}`;
-  }
   return created.length;
+}
+
+type EmbedRow = {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  description: string;
+};
+
+/**
+ * Embeds live jobs of a source that have no vector yet (new rows, or rows left behind by an
+ * earlier failed run), oldest first, capped per run. One bulk statement per chunk.
+ */
+async function embedMissing(source: JobSource, now: Date): Promise<void> {
+  const rows = await db.$queryRaw<EmbedRow[]>`
+    SELECT "id", "title", "company", "location", "description" FROM "Job"
+    WHERE "source" = ${source}::"JobSource" AND "expiresAt" > ${now.toISOString()}::timestamp AND "embedding" IS NULL
+    ORDER BY "fetchedAt" ASC, "id" ASC LIMIT ${EMBED_REPAIR_CAP}`;
+  const embedder = getEmbedder();
+  for (let i = 0; i < rows.length; i += EMBED_CHUNK) {
+    const chunk = rows.slice(i, i + EMBED_CHUNK);
+    const vectors = await embedder.embed(chunk.map(embeddingText), "document");
+    const values = chunk.map((r, k) => Prisma.sql`(${r.id}, ${toPgVector(vectors[k])})`);
+    await db.$executeRaw`UPDATE "Job" AS j SET "embedding" = v.e::vector FROM (VALUES ${Prisma.join(values)}) AS v(id, e) WHERE j."id" = v.id`;
+  }
 }
 
 async function runAdapter(
@@ -123,6 +163,7 @@ async function runAdapter(
   now: Date,
   force: boolean,
   timeoutMs: number,
+  baseFetch: typeof fetch,
 ): Promise<IngestSourceReport> {
   const { source } = adapter;
   if (!force) {
@@ -144,11 +185,16 @@ async function runAdapter(
   let inserted = 0;
   let error: string | undefined;
   try {
-    const jobs = await fetchWithDeadline(adapter, timeoutMs);
+    const jobs = await fetchWithDeadline(adapter, timeoutMs, baseFetch);
     fetched = jobs.length;
-    inserted = await ingestJobs(jobs, now);
+    inserted = await upsertJobs(jobs, now);
   } catch (err) {
     error = errorMessage(err);
+  }
+  try {
+    await embedMissing(source, now);
+  } catch (err) {
+    error ??= `embedding failed: ${errorMessage(err)}`;
   }
   await db.ingestRun.create({
     data: { source, startedAt, finishedAt: new Date(), fetched, inserted, error: error ?? null },
@@ -157,7 +203,13 @@ async function runAdapter(
 }
 
 export async function runIngest(
-  opts: { adapters?: JobSourceAdapter[]; now?: Date; force?: boolean; timeoutMs?: number } = {},
+  opts: {
+    adapters?: JobSourceAdapter[];
+    now?: Date;
+    force?: boolean;
+    timeoutMs?: number;
+    fetchFn?: typeof fetch;
+  } = {},
 ): Promise<IngestReport> {
   const now = opts.now ?? new Date();
   const adapters = opts.adapters ?? getEnabledAdapters();
@@ -165,7 +217,13 @@ export async function runIngest(
   // Concurrent, so a slow source cannot starve the others inside the route's time budget.
   const settled = await Promise.allSettled(
     adapters.map((a) =>
-      runAdapter(a, now, opts.force ?? false, opts.timeoutMs ?? ADAPTER_TIMEOUT_MS),
+      runAdapter(
+        a,
+        now,
+        opts.force ?? false,
+        opts.timeoutMs ?? ADAPTER_TIMEOUT_MS,
+        opts.fetchFn ?? fetch,
+      ),
     ),
   );
   const sources = settled.map((r, i): IngestSourceReport =>

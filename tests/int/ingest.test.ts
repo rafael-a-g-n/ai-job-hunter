@@ -1,15 +1,34 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { JobSource } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { POST } from "@/app/api/cron/ingest/route";
 import { runIngest } from "@/server/jobs/ingest";
 import type { JobSourceAdapter, NormalizedJob } from "@/server/jobs/sources";
 
+let adapters: JobSourceAdapter[] = [];
 // The route calls runIngest() with the enabled adapters: keep it off the network.
 vi.mock("@/server/jobs/sources/index", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/jobs/sources")>()),
-  getEnabledAdapters: () => [],
+  getEnabledAdapters: () => adapters,
 }));
+
+let embedFails = false;
+vi.mock("@/server/embeddings/embedder", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/server/embeddings/embedder")>();
+  return {
+    ...orig,
+    getEmbedder: () => {
+      if (embedFails) {
+        return {
+          embed: async () => {
+            throw new Error("voyage down");
+          },
+        };
+      }
+      return orig.getEmbedder();
+    },
+  };
+});
 
 const DAY = 24 * 3600 * 1000;
 const HOUR = 3600 * 1000;
@@ -48,7 +67,52 @@ const embeddedCount = async () =>
     )[0].n,
   );
 
+afterEach(() => {
+  embedFails = false;
+  vi.restoreAllMocks();
+});
+
 describe("runIngest", () => {
+  it("repairs jobs left without an embedding by a failed run", async () => {
+    const a = staticAdapter("ARBEITNOW", [job(1), job(2)]);
+    embedFails = true;
+    const first = await runIngest({ adapters: [a] });
+    expect(first.sources[0]).toMatchObject({ inserted: 2 });
+    expect(first.sources[0].error).toMatch(/voyage down/);
+    expect(await db.job.count()).toBe(2);
+    expect(await embeddedCount()).toBe(0);
+
+    embedFails = false;
+    const second = await runIngest({ adapters: [a], force: true });
+    expect(second.sources[0]).toMatchObject({ inserted: 0 });
+    expect(second.sources[0].error).toBeUndefined();
+    expect(await embeddedCount()).toBe(2);
+  });
+
+  it("refreshes many existing jobs in bulk, without per-row updates", async () => {
+    const jobs = Array.from({ length: 60 }, (_, i) => job(i + 1));
+    const a = staticAdapter("ARBEITNOW", jobs);
+    await runIngest({ adapters: [a], now: new Date(Date.now() - 2 * DAY) });
+    const update = vi.spyOn(db.job, "update");
+    const now = new Date();
+    const report = await runIngest({ adapters: [a], now, force: true });
+    expect(report.sources[0]).toMatchObject({ fetched: 60, inserted: 0 });
+    expect(update).not.toHaveBeenCalled();
+    const rows = await db.job.findMany();
+    expect(rows).toHaveLength(60);
+    expect(rows.every((r) => r.fetchedAt.getTime() === now.getTime())).toBe(true);
+  });
+
+  it("passes the injected fetch through to adapters", async () => {
+    const fake = vi.fn(async () => new Response("{}"));
+    const a = adapter("ARBEITNOW", async (f) => {
+      await f?.("http://example.test/x");
+      return [];
+    });
+    await runIngest({ adapters: [a], fetchFn: fake as unknown as typeof fetch });
+    expect(fake).toHaveBeenCalledTimes(1);
+  });
+
   it("inserts new jobs with embeddings", async () => {
     const report = await runIngest({
       adapters: [staticAdapter("ARBEITNOW", [job(1), job(2), job(3)])],
@@ -202,6 +266,20 @@ describe("POST /api/cron/ingest", () => {
     expect((await call()).status).toBe(401);
     expect((await call({ authorization: "Bearer nope" })).status).toBe(401);
     expect((await call({ authorization: "test-cron-secret" })).status).toBe(401);
+  });
+
+  it("returns 200 with the source's error when an adapter fails", async () => {
+    const failing = adapter("ADZUNA", async () => {
+      throw new Error("Adzuna request failed: 503");
+    });
+    adapters = [failing];
+    const res = await call({ authorization: "Bearer test-cron-secret" });
+    adapters = [];
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { sources: { source: string; error?: string }[] };
+    expect(body.sources).toEqual([
+      { source: "ADZUNA", fetched: 0, inserted: 0, error: "Adzuna request failed: 503" },
+    ]);
   });
 
   it("returns 200 and the report with the secret", async () => {
