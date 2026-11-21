@@ -15,9 +15,11 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.107",
     "@base-ui/react": "^1.9.0",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
+    "ai": "^7.0.179",
     "better-auth": "^1.7.27",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",

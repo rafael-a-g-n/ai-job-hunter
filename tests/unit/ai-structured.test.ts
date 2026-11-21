@@ -1,0 +1,107 @@
+import { MockLanguageModelV4 } from "ai/test";
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { AppError } from "@/lib/errors";
+import type { AiCallRecord } from "@/server/ai/cost";
+import { mockModel } from "@/server/ai/mock";
+import { generateStructured } from "@/server/ai/structured";
+
+const schema = z.object({ name: z.string(), age: z.number() });
+const usage = {
+  inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: 50, text: 50, reasoning: 0 },
+};
+const reply = (text: string) => ({
+  content: [{ type: "text" as const, text }],
+  finishReason: { unified: "stop" as const, raw: "stop" },
+  usage,
+  warnings: [],
+});
+
+function setup(...texts: string[]) {
+  const model = new MockLanguageModelV4({ doGenerate: texts.map(reply) });
+  const calls: AiCallRecord[] = [];
+  const deps = {
+    model,
+    record: async (c: AiCallRecord) => void calls.push(c),
+    assertBudget: vi.fn(async () => {}),
+  };
+  const opts = {
+    purpose: "test",
+    model: "fast" as const,
+    schema,
+    system: "sys",
+    prompt: "p",
+    mockKey: "test.echo",
+  };
+  return { model, calls, deps, opts };
+}
+
+describe("generateStructured", () => {
+  it("parses valid JSON and logs one ok attempt", async () => {
+    const { model, calls, deps, opts } = setup('{"name":"Ada","age":36}');
+    expect(await generateStructured(opts, deps)).toEqual({ name: "Ada", age: 36 });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(deps.assertBudget).toHaveBeenCalledOnce();
+    expect(calls).toEqual([
+      expect.objectContaining({ ok: true, inputTokens: 100, outputTokens: 50, model: "fast" }),
+    ]);
+  });
+
+  it("retries once after invalid output", async () => {
+    const { model, calls, deps, opts } = setup('{"name":1}', '{"name":"Ada","age":36}');
+    expect(await generateStructured(opts, deps)).toEqual({ name: "Ada", age: 36 });
+    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(calls.map((c) => c.ok)).toEqual([false, true]);
+  });
+
+  it("throws AI_FAILED after two invalid outputs", async () => {
+    const { model, calls, deps, opts } = setup("nope", '{"name":1}');
+    const err = await generateStructured(opts, deps).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AppError);
+    expect(err).toMatchObject({
+      code: "AI_FAILED",
+      userMessage: "The AI service failed. Please try again.",
+    });
+    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(calls.map((c) => c.ok)).toEqual([false, false]);
+  });
+
+  it("treats a timeout like invalid output: one retry, then AI_FAILED", async () => {
+    const calls: AiCallRecord[] = [];
+    const model = new MockLanguageModelV4({ doGenerate: () => new Promise(() => {}) });
+    const err = await generateStructured(
+      {
+        purpose: "t",
+        model: "fast",
+        schema,
+        system: "s",
+        prompt: "p",
+        mockKey: "test.echo",
+        timeoutMs: 20,
+      },
+      { model, record: async (c) => void calls.push(c), assertBudget: async () => {} },
+    ).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "AI_FAILED" });
+    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(calls.map((c) => c.ok)).toEqual([false, false]);
+  });
+
+  it("does not call the model when the budget is exhausted", async () => {
+    const { model, deps, opts } = setup('{"name":"Ada","age":36}');
+    deps.assertBudget.mockRejectedValueOnce(new AppError("BUDGET_EXHAUSTED", "x"));
+    await expect(generateStructured(opts, deps)).rejects.toMatchObject({
+      code: "BUDGET_EXHAUSTED",
+    });
+    expect(model.doGenerateCalls).toHaveLength(0);
+  });
+
+  it("works end to end with the mock provider fixture", async () => {
+    const { deps, opts } = setup();
+    const out = await generateStructured(
+      { ...opts, schema: z.object({ message: z.string() }) },
+      { ...deps, model: mockModel("test.echo") },
+    );
+    expect(out).toEqual({ message: "hello from the mock" });
+  });
+});
