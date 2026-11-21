@@ -38,11 +38,14 @@ describe("uploadCv", () => {
     expect(cv.status).toBe("UPLOADED");
   });
 
-  it("rejects a file over 5 MB", async () => {
-    const data = Buffer.alloc(6 * 1024 * 1024);
+  it("rejects a file over 4 MB", async () => {
+    const data = Buffer.alloc(4 * 1024 * 1024 + 1);
     await expect(
       uploadCv(UID, { name: "big.pdf", type: PDF_MIME, size: data.length, data }),
-    ).rejects.toMatchObject({ code: "INVALID_FILE" });
+    ).rejects.toMatchObject({
+      code: "INVALID_FILE",
+      userMessage: "The file is too large. The maximum size is 4 MB.",
+    });
     expect(await db.cv.count()).toBe(0);
   });
 

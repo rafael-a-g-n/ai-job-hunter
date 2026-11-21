@@ -5,8 +5,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {
-    // CV uploads are up to 5 MB; the default server action body limit is 1 MB.
-    serverActions: { bodySizeLimit: "6mb" },
+    // CV uploads are up to 4 MB (under Vercel's 4.5 MB body cap); the default limit is 1 MB.
+    serverActions: { bodySizeLimit: "5mb" },
   },
   turbopack: {
     rules: {

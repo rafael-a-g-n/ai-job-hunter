@@ -13,7 +13,7 @@ Upload a CV, get it analysed, find real jobs that fit it, and generate a cover l
 
 ## Features
 
-- **CV analysis:** upload a PDF or DOCX (max 5 MB). You get a 0 to 100 score with notes on structure, impact and keywords, and an editable structured profile. Scanned or empty files are rejected before any AI call.
+- **CV analysis:** upload a PDF or DOCX (max 4 MB, which keeps the request under Vercel's 4.5 MB body limit). You get a 0 to 100 score with notes on structure, impact and keywords, and an editable structured profile. Scanned or empty files are rejected before any AI call.
 - **Job matching:** semantic search over jobs ingested from Adzuna, Arbeitnow and Remotive, then an AI pass that explains each match and lists matched skills and gaps.
 - **Manual jobs:** paste a posting as text; the AI normalizes it into a private job you can match against.
 - **Cover letters:** streamed, editable, in English or Portuguese, with a choice of tone and length. The prompt restricts the letter to facts in your profile.

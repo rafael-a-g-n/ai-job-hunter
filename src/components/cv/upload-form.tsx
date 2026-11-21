@@ -6,10 +6,10 @@ import { useRef, useState, useTransition } from "react";
 import { uploadCvAction } from "@/app/(app)/cv/actions";
 import { Button } from "@/components/ui/button";
 import { Progress, ProgressLabel } from "@/components/ui/progress";
+import { CV_TOO_LARGE_MESSAGE, MAX_CV_BYTES } from "@/lib/cv-limits";
 import { cn } from "@/lib/utils";
 import { LanguageSelect } from "./language-select";
 
-const MAX_BYTES = 5 * 1024 * 1024;
 const TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -30,7 +30,7 @@ export function UploadForm({ defaultLanguage = "en" }: { defaultLanguage?: strin
     setFailedCvId(null);
     if (!f) return;
     if (!TYPES.includes(f.type)) return setError("Upload a PDF or DOCX file.");
-    if (f.size > MAX_BYTES) return setError("The file is too large. The maximum size is 5 MB.");
+    if (f.size > MAX_CV_BYTES) return setError(CV_TOO_LARGE_MESSAGE);
     setFile(f);
   }
 
@@ -78,7 +78,7 @@ export function UploadForm({ defaultLanguage = "en" }: { defaultLanguage?: strin
         )}
       >
         <p className="font-medium">{file ? file.name : "Drag and drop your CV here"}</p>
-        <p className="text-muted-foreground">or click to browse. PDF or DOCX, up to 5 MB.</p>
+        <p className="text-muted-foreground">or click to browse. PDF or DOCX, up to 4 MB.</p>
         <input
           ref={input}
           type="file"

@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
+import { CV_TOO_LARGE_MESSAGE, MAX_CV_BYTES } from "@/lib/cv-limits";
 import { AppError } from "@/lib/errors";
 import type { Cv } from "@/generated/prisma/client";
 import { getBlobStore } from "@/server/storage/blob-store";
 import { DOCX_MIME, extractText, PDF_MIME } from "./parse";
 
-export const MAX_CV_BYTES = 5 * 1024 * 1024;
 export const MIN_CV_TEXT_CHARS = 200;
 export const UNREADABLE_CV_MESSAGE =
   "We couldn't read text from this file. Try a text-based PDF or DOCX.";
@@ -25,7 +25,7 @@ export async function uploadCv(userId: string, file: CvFile): Promise<Cv> {
   }
   // Trust the real byte length, not the client-declared size.
   if (file.data.length > MAX_CV_BYTES || file.size > MAX_CV_BYTES) {
-    throw new AppError("INVALID_FILE", "The file is too large. The maximum size is 5 MB.");
+    throw new AppError("INVALID_FILE", CV_TOO_LARGE_MESSAGE);
   }
   if (file.data.length === 0) {
     throw new AppError("INVALID_FILE", "The file is empty.");

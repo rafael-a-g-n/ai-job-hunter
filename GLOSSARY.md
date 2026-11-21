@@ -2,7 +2,7 @@
 
 Domain terms as the code and UI use them.
 
-**CV**: An uploaded PDF or DOCX file (max 5 MB) and what the app derives from it: extracted text, a Profile, an Analysis and an embedding. A user may have several; one is active.
+**CV**: An uploaded PDF or DOCX file (max 4 MB) and what the app derives from it: extracted text, a Profile, an Analysis and an embedding. A user may have several; one is active.
 
 **Profile**: The structured data extracted from a CV (contact, skills, experience, education, summary). Editable by the user. Cover letters may only use facts present in the Profile.
 
