@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { demoSession } from "@/server/demo/session-plugin";
 import { getMailer } from "@/server/mail/mailer";
 import { resetPasswordEmail, verificationEmail } from "@/server/mail/templates";
 
@@ -32,5 +33,5 @@ export const auth = betterAuth({
     },
   },
   rateLimit: { enabled: true },
-  plugins: [nextCookies()],
+  plugins: [demoSession(), nextCookies()],
 });
