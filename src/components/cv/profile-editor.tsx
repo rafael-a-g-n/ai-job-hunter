@@ -15,6 +15,10 @@ type Level = Skill["level"];
 
 export function ProfileEditor({ cvId, initial }: { cvId: string; initial: CvProfile }) {
   const [profile, setProfile] = useState<CvProfile>(initial);
+  // Raw textarea text, so a trailing newline survives typing; split and filtered on save.
+  const [highlightText, setHighlightText] = useState<string[]>(() =>
+    initial.experience.map((e) => e.highlights.join("\n")),
+  );
   const [newSkill, setNewSkill] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, start] = useTransition();
@@ -38,7 +42,14 @@ export function ProfileEditor({ cvId, initial }: { cvId: string; initial: CvProf
   function save() {
     setStatus(null);
     start(async () => {
-      const result = await saveProfileAction(cvId, profile);
+      const toSave: CvProfile = {
+        ...profile,
+        experience: profile.experience.map((e, i) => ({
+          ...e,
+          highlights: (highlightText[i] ?? "").split("\n").filter((l) => l.trim() !== ""),
+        })),
+      };
+      const result = await saveProfileAction(cvId, toSave);
       setStatus(
         result.ok ? { kind: "ok", text: "Profile saved." } : { kind: "error", text: result.error },
       );
@@ -141,12 +152,11 @@ export function ProfileEditor({ cvId, initial }: { cvId: string; initial: CvProf
               <Textarea
                 aria-label="Highlights, one per line"
                 rows={3}
-                value={exp.highlights.join("\n")}
-                onChange={(e) =>
-                  setExperience(i, {
-                    highlights: e.target.value.split("\n").filter((l) => l.trim() !== ""),
-                  })
-                }
+                value={highlightText[i] ?? ""}
+                onChange={(e) => {
+                  setStatus(null);
+                  setHighlightText((prev) => prev.map((t, j) => (j === i ? e.target.value : t)));
+                }}
               />
             </div>
           ))}

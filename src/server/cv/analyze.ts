@@ -1,6 +1,7 @@
 import type { Cv, Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { AppError, NotFoundError } from "@/lib/errors";
+import { describeError } from "@/server/ai/deps";
 import { generateStructured, type AiDeps } from "@/server/ai/structured";
 import { getEmbedder } from "@/server/embeddings/embedder";
 import { toPgVector } from "@/server/embeddings/vector";
@@ -10,6 +11,7 @@ import { getCv } from "./queries";
 import { CvAnalysisResult, CvProfile, profileToText } from "./schemas";
 
 const GENERIC_FAILURE = "The analysis failed. Please try again.";
+const STALE_CLAIM_MS = 5 * 60 * 1000;
 const NOT_READY = "This CV can't be analysed. Upload it again.";
 
 async function embedProfile(profile: CvProfile): Promise<string> {
@@ -28,17 +30,29 @@ export async function analyzeCv(
   deps: AiDeps = {},
 ): Promise<Cv> {
   const cv = await getCv(userId, cvId);
-  if (cv.status === "FAILED" || cv.status === "ANALYZING") {
+  const staleBefore = () => new Date(Date.now() - STALE_CLAIM_MS);
+  const stale = cv.status === "ANALYZING" && cv.updatedAt < staleBefore();
+  if (cv.status === "FAILED" || (cv.status === "ANALYZING" && !stale)) {
     throw new AppError("CV_NOT_READY", NOT_READY);
   }
   const user = await db.user.findUnique({ where: { id: userId }, select: { isDemo: true } });
   if (!user) throw new NotFoundError("User");
+  // A CV that already holds an analysis keeps it when a re-analysis fails.
+  const hadAnalysis = cv.profile !== null && cv.analysis !== null;
 
   await consumeUsage(userId, "CV_ANALYSIS", user.isDemo);
 
-  // Atomic claim, so two parallel requests cannot both run the analysis.
+  // Atomic claim, so two parallel requests cannot both run the analysis. A claim older than
+  // STALE_CLAIM_MS (a crashed run) can be reclaimed.
   const claimed = await db.cv.updateMany({
-    where: { id: cvId, userId, status: { in: ["UPLOADED", "ANALYZED"] } },
+    where: {
+      id: cvId,
+      userId,
+      OR: [
+        { status: { in: ["UPLOADED", "ANALYZED"] } },
+        { status: "ANALYZING", updatedAt: { lt: staleBefore() } },
+      ],
+    },
     data: { status: "ANALYZING", failureReason: null },
   });
   if (claimed.count === 0) {
@@ -62,6 +76,11 @@ export async function analyzeCv(
     const embedding = await embedProfile(result.profile);
     return await db.$transaction(async (tx) => {
       await tx.$executeRaw`UPDATE "Cv" SET "embedding" = ${embedding}::vector WHERE "id" = ${cvId} AND "userId" = ${userId}`;
+      // Activation follows analysis success.
+      await tx.cv.updateMany({
+        where: { userId, isActive: true, NOT: { id: cvId } },
+        data: { isActive: false },
+      });
       return tx.cv.update({
         where: { id: cvId },
         data: {
@@ -69,18 +88,30 @@ export async function analyzeCv(
           analysis: result.analysis as Prisma.InputJsonValue,
           status: "ANALYZED",
           failureReason: null,
+          isActive: true,
         },
       });
     });
   } catch (e) {
-    await db.cv.update({
-      where: { id: cvId },
-      data: {
-        status: "FAILED",
-        failureReason: e instanceof AppError ? e.userMessage : GENERIC_FAILURE,
-      },
-    });
-    await refundUsage(userId, "CV_ANALYSIS");
+    // Neither step may mask the original error or skip the other.
+    try {
+      await db.cv.update({
+        where: { id: cvId },
+        data: hadAnalysis
+          ? { status: "ANALYZED", failureReason: null }
+          : {
+              status: "FAILED",
+              failureReason: e instanceof AppError ? e.userMessage : GENERIC_FAILURE,
+            },
+      });
+    } catch (statusError) {
+      console.error("[cv] failed to restore CV status", describeError(statusError));
+    }
+    try {
+      await refundUsage(userId, "CV_ANALYSIS");
+    } catch (refundError) {
+      console.error("[cv] failed to refund usage", describeError(refundError));
+    }
     throw e;
   }
 }

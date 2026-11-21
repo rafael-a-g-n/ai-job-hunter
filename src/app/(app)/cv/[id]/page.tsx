@@ -31,7 +31,7 @@ async function CvDetail({ params }: { params: Promise<{ id: string }> }) {
       {cv.status === "ANALYZED" && analysis.success && profile.success ? (
         <>
           <CvReport analysis={analysis.data} />
-          <ProfileEditor cvId={cv.id} initial={profile.data} />
+          <ProfileEditor key={cv.updatedAt.toISOString()} cvId={cv.id} initial={profile.data} />
           <AnalyzeButton cvId={cv.id} label="Re-analyse CV" />
         </>
       ) : cv.status === "UPLOADED" ? (

@@ -46,10 +46,12 @@ export async function uploadCv(userId: string, file: CvFile): Promise<Cv> {
     const readable = text.length >= MIN_CV_TEXT_CHARS;
 
     return await db.$transaction(async (tx) => {
-      // A failed upload only becomes active when it is the user's first CV; otherwise the
-      // previous active CV stays active and the failed one is stored inactive.
-      const hasOther = (await tx.cv.count({ where: { userId } })) > 0;
-      const isActive = readable || !hasOther;
+      // Activation follows analysis success: a new CV is active only when the user has no
+      // ANALYZED CV (analyzeCv activates it later). A failed upload never steals active status;
+      // it is active only as the user's very first CV.
+      const total = await tx.cv.count({ where: { userId } });
+      const analyzed = await tx.cv.count({ where: { userId, status: "ANALYZED" } });
+      const isActive = readable ? analyzed === 0 : total === 0;
       if (isActive) {
         await tx.cv.updateMany({ where: { userId, isActive: true }, data: { isActive: false } });
       }

@@ -93,6 +93,14 @@ describe("uploadCv", () => {
     expect(failed.isActive).toBe(true);
   });
 
+  it("keeps an ANALYZED CV active when a new readable CV is uploaded", async () => {
+    const first = await uploadCv(UID, file("sample.pdf", PDF_MIME));
+    await db.cv.update({ where: { id: first.id }, data: { status: "ANALYZED" } });
+    const second = await uploadCv(UID, file("sample.docx", DOCX_MIME));
+    expect(second.isActive).toBe(false);
+    expect((await db.cv.findUniqueOrThrow({ where: { id: first.id } })).isActive).toBe(true);
+  });
+
   it("does not deactivate another user's CV", async () => {
     await db.user.create({ data: { id: "other", name: "O", email: "o@example.com" } });
     const theirs = await uploadCv("other", file("sample.pdf", PDF_MIME));

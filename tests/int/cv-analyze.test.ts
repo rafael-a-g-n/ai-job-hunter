@@ -138,3 +138,71 @@ describe("cv queries", () => {
     expect(await listCvs(UID)).toHaveLength(1);
   });
 });
+
+describe("activation and recovery", () => {
+  const isActive = async (id: string) => (await getCv(UID, id)).isActive;
+
+  it("activates the new CV and deactivates the old one only after analysis succeeds", async () => {
+    const old = await makeCv();
+    await analyzeCv(UID, old.id, "en", noAi);
+    const next = await db.cv.create({
+      data: {
+        userId: UID,
+        fileName: "new.pdf",
+        blobKey: "cv/k2",
+        mimeType: "application/pdf",
+        sizeBytes: 10,
+        rawText: "Ana Silva Frontend Developer ".repeat(10),
+        isActive: false,
+      },
+    });
+    // Analysis fails: the old CV stays active.
+    await expect(
+      analyzeCv(UID, next.id, "en", { ...noAi, model: failingModel() }),
+    ).rejects.toBeInstanceOf(AppError);
+    expect(await isActive(old.id)).toBe(true);
+    expect(await isActive(next.id)).toBe(false);
+    // Limit reached: the old CV stays active.
+    await db.cv.update({ where: { id: next.id }, data: { status: "UPLOADED" } });
+    await db.usageCounter.updateMany({ data: { count: 3 } });
+    await expect(analyzeCv(UID, next.id, "en", noAi)).rejects.toBeInstanceOf(LimitExceededError);
+    expect(await isActive(old.id)).toBe(true);
+    // Success: the new CV becomes the only active one.
+    await db.cv.update({ where: { id: next.id }, data: { status: "UPLOADED" } });
+    await db.usageCounter.updateMany({ data: { count: 0 } });
+    await analyzeCv(UID, next.id, "en", noAi);
+    expect(await isActive(next.id)).toBe(true);
+    expect(await isActive(old.id)).toBe(false);
+  });
+
+  it("restores ANALYZED with the existing analysis when a re-analysis fails", async () => {
+    const cv = await makeCv();
+    const first = await analyzeCv(UID, cv.id, "en", noAi);
+    const before = await embeddingText(cv.id);
+    await expect(
+      analyzeCv(UID, cv.id, "en", { ...noAi, model: failingModel() }),
+    ).rejects.toBeInstanceOf(AppError);
+    const after = await getCv(UID, cv.id);
+    expect(after.status).toBe("ANALYZED");
+    expect(after.failureReason).toBeNull();
+    expect(after.profile).toEqual(first.profile);
+    expect(after.analysis).toEqual(first.analysis);
+    expect(await embeddingText(cv.id)).toBe(before);
+    expect(await usageCount()).toBe(1);
+  });
+
+  it("reclaims an ANALYZING CV whose claim is older than 5 minutes", async () => {
+    const cv = await makeCv(UID, "ANALYZING");
+    await db.$executeRaw`UPDATE "Cv" SET "updatedAt" = now() - interval '6 minutes' WHERE "id" = ${cv.id}`;
+    const result = await analyzeCv(UID, cv.id, "en", noAi);
+    expect(result.status).toBe("ANALYZED");
+    expect(await usageCount()).toBe(1);
+  });
+
+  it("does not reclaim a fresh ANALYZING CV", async () => {
+    const cv = await makeCv(UID, "ANALYZING");
+    await expect(analyzeCv(UID, cv.id, "en", noAi)).rejects.toMatchObject({
+      code: "CV_NOT_READY",
+    });
+  });
+});
