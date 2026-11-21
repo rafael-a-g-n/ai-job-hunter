@@ -206,3 +206,53 @@ describe("activation and recovery", () => {
     });
   });
 });
+
+describe("cached match invalidation", () => {
+  const DAY = 86_400_000;
+
+  async function seedMatches() {
+    const cv = await makeCv();
+    await analyzeCv(UID, cv.id, "en", noAi);
+    await db.user.create({ data: { id: "b", name: "B", email: "b@example.com" } });
+    const other = await makeCv("b");
+    const job = await db.job.create({
+      data: {
+        source: "ARBEITNOW",
+        dedupeHash: "inv-job",
+        title: "Frontend Engineer",
+        company: "Lisbon Labs",
+        description: "React",
+        expiresAt: new Date(Date.now() + 30 * DAY),
+      },
+    });
+    for (const cvId of [cv.id, other.id]) {
+      await db.matchResult.create({
+        data: { cvId, jobId: job.id, vectorScore: 0.8, score: 90, matchedSkills: [], gaps: [] },
+      });
+    }
+    return { cv, other };
+  }
+  const matchCount = (cvId: string) => db.matchResult.count({ where: { cvId } });
+
+  it("a successful re-analysis drops the CV's cached matches, and only those", async () => {
+    const { cv, other } = await seedMatches();
+    await analyzeCv(UID, cv.id, "en", noAi);
+    expect(await matchCount(cv.id)).toBe(0);
+    expect(await matchCount(other.id)).toBe(1);
+  });
+
+  it("a failed re-analysis keeps the cached matches", async () => {
+    const { cv } = await seedMatches();
+    await expect(
+      analyzeCv(UID, cv.id, "en", { ...noAi, model: failingModel() }),
+    ).rejects.toBeInstanceOf(AppError);
+    expect(await matchCount(cv.id)).toBe(1);
+  });
+
+  it("a profile edit drops the CV's cached matches, and only those", async () => {
+    const { cv, other } = await seedMatches();
+    await updateCvProfile(UID, cv.id, profile());
+    expect(await matchCount(cv.id)).toBe(0);
+    expect(await matchCount(other.id)).toBe(1);
+  });
+});

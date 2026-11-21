@@ -78,6 +78,8 @@ export async function analyzeCv(
     const embedding = await embedProfile(result.profile);
     return await db.$transaction(async (tx) => {
       await tx.$executeRaw`UPDATE "Cv" SET "embedding" = ${embedding}::vector WHERE "id" = ${cvId} AND "userId" = ${userId}`;
+      // Scores were computed against the old profile.
+      await tx.matchResult.deleteMany({ where: { cvId, cv: { userId } } });
       // Activation follows analysis success.
       await tx.cv.updateMany({
         where: { userId, isActive: true, NOT: { id: cvId } },
@@ -118,7 +120,7 @@ export async function analyzeCv(
   }
 }
 
-/** Saves an edited profile and re-embeds it. No AI call and no usage. */
+/** Saves an edited profile, re-embeds it and drops its cached match scores. No AI call and no usage. */
 export async function updateCvProfile(
   userId: string,
   cvId: string,
@@ -132,6 +134,7 @@ export async function updateCvProfile(
   const embedding = await embedProfile(parsed);
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`UPDATE "Cv" SET "embedding" = ${embedding}::vector WHERE "id" = ${cvId} AND "userId" = ${userId}`;
+    await tx.matchResult.deleteMany({ where: { cvId, cv: { userId } } });
     return tx.cv.update({
       where: { id: cvId },
       data: { profile: parsed as Prisma.InputJsonValue },
