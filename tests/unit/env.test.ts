@@ -41,4 +41,11 @@ describe("parseEnv", () => {
     expect(env.GLOBAL_DAILY_AI_BUDGET_USD).toBe(2.5);
     expect(env.TURNSTILE_BYPASS).toBe(true);
   });
+
+  it("treats empty optional values as unset", () => {
+    expect(() => parseEnv({ ...valid, AI_PROVIDER: "mock", ANTHROPIC_API_KEY: "" })).not.toThrow();
+    expect(() => parseEnv({ ...valid, AI_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "" })).toThrow(
+      /ANTHROPIC_API_KEY/,
+    );
+  });
 });

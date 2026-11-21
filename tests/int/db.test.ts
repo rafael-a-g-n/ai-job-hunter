@@ -52,4 +52,26 @@ describe("database", () => {
     expect(rows[0].distance).toBeCloseTo(0, 5);
     expect(rows[1].distance).toBeGreaterThan(0);
   });
+
+  it("keeps AiCall rows with a null userId when the user is deleted", async () => {
+    const user = await db.user.create({
+      data: { id: "u2", name: "Bob", email: "bob@example.com" },
+    });
+    const call = await db.aiCall.create({
+      data: {
+        userId: user.id,
+        purpose: "test",
+        model: "m",
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: "0.01",
+        durationMs: 5,
+        ok: true,
+      },
+    });
+    await db.user.delete({ where: { id: user.id } });
+    const row = await db.aiCall.findUnique({ where: { id: call.id } });
+    expect(row).not.toBeNull();
+    expect(row?.userId).toBeNull();
+  });
 });

@@ -157,6 +157,8 @@ model Job {
   expiresAt   DateTime
   ownerId     String?
   owner       User?                       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  // WARNING: the HNSW index on this column lives in raw migration SQL, not in this schema.
+  // `prisma migrate dev` will propose dropping it; remove that from any generated migration.
   embedding   Unsupported("vector(1024)")?
 
   saved        SavedJob[]
@@ -224,7 +226,8 @@ model UsageCounter {
 model AiCall {
   id           String   @id @default(cuid())
   userId       String?
-  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SetNull: cost rows must survive user deletion (the global daily AI budget sums them).
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   purpose      String
   model        String
   inputTokens  Int

@@ -8,7 +8,7 @@ export function assertTestDatabase(url: string): void {
   const u = new URL(url);
   const local = u.hostname === "localhost" || u.hostname === "127.0.0.1";
   const dbName = u.pathname.replace(/^\//, "");
-  if (!((local && u.port === "5433") || dbName.endsWith("_test"))) {
+  if (!(local && (u.port === "5433" || dbName.endsWith("_test")))) {
     throw new Error(`Refusing to run integration tests against ${u.hostname}:${u.port}/${dbName}`);
   }
 }

@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Treat empty strings (e.g. `KEY=` in .env files) as unset. */
+const optionalStr = z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional());
+
 const bool = z
   .enum(["true", "false"])
   .or(z.boolean())
@@ -11,19 +14,19 @@ const schema = z
     APP_URL: z.string().url(),
     BETTER_AUTH_SECRET: z.string().min(32),
     AI_PROVIDER: z.enum(["anthropic", "mock"]),
-    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    ANTHROPIC_API_KEY: optionalStr,
     EMBEDDINGS_PROVIDER: z.enum(["voyage", "fake"]),
-    VOYAGE_API_KEY: z.string().min(1).optional(),
+    VOYAGE_API_KEY: optionalStr,
     STORAGE_PROVIDER: z.enum(["vercel-blob", "local"]),
-    BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+    BLOB_READ_WRITE_TOKEN: optionalStr,
     MAIL_PROVIDER: z.enum(["resend", "console"]),
-    RESEND_API_KEY: z.string().min(1).optional(),
+    RESEND_API_KEY: optionalStr,
     EMAIL_FROM: z.string().min(1),
-    ADZUNA_APP_ID: z.string().min(1).optional(),
-    ADZUNA_APP_KEY: z.string().min(1).optional(),
+    ADZUNA_APP_ID: optionalStr,
+    ADZUNA_APP_KEY: optionalStr,
     CRON_SECRET: z.string().min(1),
-    TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
-    NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
+    TURNSTILE_SECRET_KEY: optionalStr,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: optionalStr,
     TURNSTILE_BYPASS: bool.default(false),
     GLOBAL_DAILY_AI_BUDGET_USD: z.coerce.number().nonnegative().default(5),
   })
