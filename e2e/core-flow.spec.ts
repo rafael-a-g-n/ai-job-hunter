@@ -42,15 +42,17 @@ test("upload a CV, see matches, write and edit a letter, paste a job", async ({
   const editor = page.getByRole("textbox", { name: "Cover letter" });
   await expect(editor).toHaveValue(/Dear Hiring Manager/);
   const edited = "Dear Hiring Manager, this sentence was edited in the e2e test.";
-  await editor.fill(edited);
-  // Prove the debounced autosave (not the unmount save): reload until the server returns the edit.
   const letterUrl = page.url();
-  await expect(async () => {
-    await page.goto(letterUrl);
-    await expect(page.getByRole("textbox", { name: "Cover letter" })).toHaveValue(edited, {
-      timeout: 1_000,
-    });
-  }).toPass({ timeout: 15_000 });
+  // The debounced autosave is a server-action POST to the letter page; wait for it WITHOUT
+  // navigating, so the unmount/pagehide save cannot be what persists the edit.
+  const autosave = page.waitForResponse(
+    (r) => r.request().method() === "POST" && r.url() === letterUrl && r.ok(),
+  );
+  await editor.fill(edited);
+  await autosave;
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Cover letter" })).toHaveValue(edited);
 
   // It appears in the list, with the edit.
   await page.goto("/letters");
