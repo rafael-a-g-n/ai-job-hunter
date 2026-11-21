@@ -97,3 +97,38 @@ describe("auth", () => {
     expect(res.user.email).toBe(EMAIL);
   });
 });
+
+describe("auth rate limiting", () => {
+  const post = (path: string, body: unknown, ip = "203.0.113.7") =>
+    auth.handler(
+      new Request(`http://localhost:3000/api/auth${path}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://localhost:3000",
+          "x-forwarded-for": ip,
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+
+  it("allows 5 sign-in attempts per minute per IP, then answers 429 (stored in the database)", async () => {
+    const body = { email: "nobody@example.com", password: "wrong-password-1" };
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) statuses.push((await post("/sign-in/email", body)).status);
+    expect(statuses.slice(0, 5).every((s) => s !== 429)).toBe(true);
+    expect(statuses[5]).toBe(429);
+    expect(await db.rateLimit.count()).toBeGreaterThan(0);
+    // Another IP has its own budget.
+    expect((await post("/sign-in/email", body, "198.51.100.9")).status).not.toBe(429);
+  });
+
+  it("allows 3 sign-ups per 10 minutes per IP", async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const body = { email: `rl-${i}@example.com`, password: PASSWORD, name: "Rl" };
+      statuses.push((await post("/sign-up/email", body)).status);
+    }
+    expect(statuses).toEqual([200, 200, 200, 429]);
+  });
+});

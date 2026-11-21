@@ -96,7 +96,7 @@ The script writes only the JSON file, not the database, and uses no daily limits
 
 ## Notes
 
-- **Better Auth rate limiting.** It is enabled and uses in-memory counters by default, which do not hold across serverless instances. For a stricter setup set `rateLimit: { storage: "database" }` in `src/lib/auth.ts` (this needs a `rateLimit` table; see the Better Auth docs). Not done in v1.
+- **Better Auth rate limiting.** Counters live in the `rateLimit` table (`storage: "database"` in `src/lib/auth.ts`), so they hold across serverless instances. Sign-up, password-reset and verification emails allow 3 requests per 10 minutes per IP; email sign-in allows 5 per minute.
 - **Upload size.** Vercel functions accept request bodies up to 4.5 MB, so CV uploads (sent through a server action) are capped at 4 MB, with `bodySizeLimit: "5mb"` in `next.config.ts` leaving room for the form overhead.
 - **Client IP.** The demo's per-IP cap reads the first `x-forwarded-for` entry. That header is only trustworthy behind Vercel's proxy. If you host elsewhere, put a proxy in front that overwrites it.
 - **Seed data.** Do not run `npm run db:seed` against production: its jobs carry fake vectors.

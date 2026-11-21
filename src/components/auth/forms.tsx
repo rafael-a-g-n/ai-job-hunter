@@ -7,6 +7,7 @@ import { z } from "zod";
 import { authClient } from "@/lib/auth-client";
 import { safeNext } from "@/lib/safe-url";
 import { AuthForm } from "./auth-form";
+import { authErrorMessage, signInErrorMessage } from "./error-messages";
 
 const email = z.string().trim().email("Enter a valid email address");
 const password = z.string().min(8, "Password must be at least 8 characters");
@@ -26,11 +27,7 @@ export function SignInForm() {
       submitLabel="Sign in"
       onSubmit={async (values) => {
         const { error } = await authClient.signIn.email(values);
-        if (error) {
-          return error.status === 403
-            ? "Please verify your email before signing in."
-            : "Invalid email or password.";
-        }
+        if (error) return signInErrorMessage(error.status);
         router.push(next);
         router.refresh();
         return undefined;
@@ -72,7 +69,7 @@ export function SignUpForm() {
       submitLabel="Create account"
       onSubmit={async (values) => {
         const { error } = await authClient.signUp.email({ ...values, callbackURL: "/dashboard" });
-        if (error) return error.message ?? "Could not create the account.";
+        if (error) return authErrorMessage(error, "Could not create the account.");
         setDone(true);
         return undefined;
       }}
@@ -100,7 +97,7 @@ export function ForgotPasswordForm() {
           email: values.email,
           redirectTo: "/reset-password",
         });
-        if (error) return error.message ?? "Could not send the reset link.";
+        if (error) return authErrorMessage(error, "Could not send the reset link.");
         setSent(true);
         return undefined;
       }}

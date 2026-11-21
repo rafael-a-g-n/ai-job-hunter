@@ -114,6 +114,16 @@ model Verification {
   @@map("verification")
 }
 
+// Better Auth rate limiter (rateLimit.storage = "database"); lastRequest is epoch milliseconds.
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
+}
+
 // ---- Application tables ----
 
 model Cv {

@@ -32,6 +32,16 @@ export const auth = betterAuth({
       demoExpiresAt: { type: "date", required: false, input: false },
     },
   },
-  rateLimit: { enabled: true },
+  // Stored in the database, so the limits hold across serverless instances.
+  rateLimit: {
+    enabled: true,
+    storage: "database",
+    customRules: {
+      "/sign-up/email": { window: 600, max: 3 },
+      "/request-password-reset": { window: 600, max: 3 },
+      "/send-verification-email": { window: 600, max: 3 },
+      "/sign-in/email": { window: 60, max: 5 },
+    },
+  },
   plugins: [demoSession(), nextCookies()],
 });
