@@ -1,5 +1,5 @@
 import { MockLanguageModelV4 } from "ai/test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { AppError, NotFoundError } from "@/lib/errors";
 import { analyzeCv } from "@/server/cv/analyze";
@@ -113,7 +113,7 @@ describe("findMatches", () => {
   it("recalls the frontend jobs first and re-ranks the top 10 with the mock scores", async () => {
     await seedAll();
     await analysedCv();
-    const matches = await findMatches(A, false);
+    const { matches, rerankStatus } = await findMatches(A, false);
     expect(matches).toHaveLength(15);
 
     const byVector = [...matches].sort((a, b) => b.vectorScore - a.vectorScore).slice(0, 5);
@@ -129,17 +129,18 @@ describe("findMatches", () => {
     const scores = ranked.map((m) => m.score ?? 0);
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
     expect(matches.slice(10).every((m) => m.score === null)).toBe(true);
+    expect(rerankStatus).toBe("ok");
     expect(await usageCount()).toBe(1);
   });
 
   it("serves a second call from the cache: no AI call, no usage", async () => {
     await seedAll();
     await analysedCv();
-    const first = await findMatches(A, false);
+    const { matches: first } = await findMatches(A, false);
     const callsBefore = await db.aiCall.count({ where: { purpose: "matching.rerank" } });
     expect(callsBefore).toBe(1);
 
-    const second = await findMatches(A, false);
+    const { matches: second } = await findMatches(A, false);
     expect(await db.aiCall.count({ where: { purpose: "matching.rerank" } })).toBe(callsBefore);
     expect(await usageCount()).toBe(1);
     expect(second.map((m) => [m.job.id, m.score])).toEqual(first.map((m) => [m.job.id, m.score]));
@@ -153,17 +154,82 @@ describe("findMatches", () => {
       { jobId: "ghost-id", score: 99, matchedSkills: [], gaps: [], explanation: "x" },
       { jobId: real.id, score: 70, matchedSkills: ["React"], gaps: [], explanation: "ok" },
     ]);
-    const matches = await findMatches(A, false, {}, { ...noAi, model });
+    const { matches } = await findMatches(A, false, {}, { ...noAi, model });
     expect(matches[0]).toMatchObject({ score: 70 });
     expect(matches.filter((m) => m.score !== null)).toHaveLength(1);
-    expect(await db.matchResult.count()).toBe(1);
+    expect(await db.matchResult.count({ where: { score: { not: null } } })).toBe(1);
     expect(await db.matchResult.count({ where: { jobId: "ghost-id" } })).toBe(0);
+  });
+
+  it("records jobs left out of the answer as attempted and never sends them again", async () => {
+    await seedAll();
+    await analysedCv();
+    const [real] = await db.job.findMany({ where: { title: "Frontend Developer" } });
+    const model = fixedModel([
+      { jobId: real.id, score: 70, matchedSkills: ["React"], gaps: [], explanation: "ok" },
+    ]);
+    await findMatches(A, false, {}, { ...noAi, model });
+    const attempted = await db.matchResult.findMany({ where: { rerankedAt: { not: null } } });
+    expect(attempted).toHaveLength(10);
+    expect(attempted.filter((m) => m.score === null)).toHaveLength(9);
+
+    const again = await findMatches(A, false, {}, { ...noAi, model });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(again.rerankStatus).toBe("ok");
+    expect(await usageCount()).toBe(1);
+  });
+
+  it("rounds a non-integer score instead of failing the re-rank", async () => {
+    await seedAll();
+    await analysedCv();
+    const [real] = await db.job.findMany({ where: { title: "Frontend Developer" } });
+    const model = fixedModel([
+      { jobId: real.id, score: 87.6, matchedSkills: [], gaps: [], explanation: "ok" },
+    ]);
+    const { matches, rerankStatus } = await findMatches(A, false, {}, { ...noAi, model });
+    expect(rerankStatus).toBe("ok");
+    expect(matches[0]).toMatchObject({ score: 88 });
+  });
+
+  it("pauses the re-rank for 10 minutes after an AI failure", async () => {
+    await seedAll();
+    const cv = await analysedCv();
+    const model = failingModel();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await findMatches(A, false, {}, { ...noAi, model })).rerankStatus).toBe("failed");
+      expect(model.doGenerateCalls).toHaveLength(2);
+      // Within the cooldown: no AI call at all.
+      expect((await findMatches(A, false, {}, { ...noAi, model })).rerankStatus).toBe("failed");
+      expect(model.doGenerateCalls).toHaveLength(2);
+    } finally {
+      spy.mockRestore();
+    }
+    await db.cv.update({
+      where: { id: cv.id },
+      data: { rerankFailedAt: new Date(Date.now() - 11 * 60 * 1000) },
+    });
+    const after = await findMatches(A, false, {}, noAi);
+    expect(after.rerankStatus).toBe("ok");
+    expect(after.matches.some((m) => m.score !== null)).toBe(true);
+    expect(await usageCount()).toBe(1);
   });
 
   it("returns vector-only results and refunds usage when the AI fails", async () => {
     await seedAll();
     await analysedCv();
-    const matches = await findMatches(A, false, {}, { ...noAi, model: failingModel() });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { matches, rerankStatus } = await findMatches(
+      A,
+      false,
+      {},
+      {
+        ...noAi,
+        model: failingModel(),
+      },
+    );
+    spy.mockRestore();
+    expect(rerankStatus).toBe("failed");
     expect(matches).toHaveLength(15);
     expect(matches.every((m) => m.score === null)).toBe(true);
     const sims = matches.map((m) => m.vectorScore);
@@ -176,7 +242,8 @@ describe("findMatches", () => {
     await seedAll();
     await analysedCv();
     await db.$executeRaw`INSERT INTO "UsageCounter" ("userId","action","day","count") VALUES (${A}, 'MATCH_RERANK', (now() AT TIME ZONE 'UTC')::date, 10)`;
-    const matches = await findMatches(A, false, {}, noAi);
+    const { matches, rerankStatus } = await findMatches(A, false, {}, noAi);
+    expect(rerankStatus).toBe("limit");
     expect(matches).toHaveLength(15);
     expect(matches.every((m) => m.score === null)).toBe(true);
     expect(await usageCount()).toBe(10);
@@ -187,7 +254,7 @@ describe("findMatches", () => {
     await makeJob("Frontend Developer Secret", { ownerId: B });
     await makeJob("Frontend Developer Mine", { ownerId: A });
     await analysedCv();
-    const titles = (await findMatches(A, false)).map((m) => m.job.title);
+    const titles = (await findMatches(A, false)).matches.map((m) => m.job.title);
     expect(titles).toContain("Frontend Developer Mine");
     expect(titles).not.toContain("Frontend Developer Secret");
   });
@@ -196,7 +263,7 @@ describe("findMatches", () => {
     await seedAll();
     await makeJob("Remote Frontend Developer", { remote: true });
     await analysedCv();
-    const matches = await findMatches(A, false, { filters: { remote: true } }, noAi);
+    const { matches } = await findMatches(A, false, { filters: { remote: true } }, noAi);
     expect(matches.map((m) => m.job.title)).toEqual(["Remote Frontend Developer"]);
   });
 
@@ -228,7 +295,7 @@ describe("getMatchForJob", () => {
     await seedAll();
     await analysedCv();
     await analysedCv(B);
-    const matches = await findMatches(A, false);
+    const { matches } = await findMatches(A, false);
     const top = matches[0];
     const calls = await db.aiCall.count();
 

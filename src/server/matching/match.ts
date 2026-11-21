@@ -23,8 +23,18 @@ export type MatchView = {
 
 export type MatchFilters = { remote?: boolean; location?: string };
 
+/**
+ * What happened to the AI re-rank on this call: `ok` (ran, or nothing needed scoring), `limit`
+ * (daily limit reached), `failed` (AI error, budget or failure cooldown), `skipped` (a demo user on
+ * the template CV).
+ */
+export type RerankStatus = "ok" | "limit" | "failed" | "skipped";
+
+export type MatchesResult = { matches: MatchView[]; rerankStatus: RerankStatus };
+
 const RECALL_LIMIT = 50;
 const RERANK_BATCH = 10;
+export const RERANK_FAILURE_COOLDOWN_MS = 10 * 60 * 1000;
 
 type RecallRow = {
   id: string;
@@ -41,6 +51,7 @@ type RecallRow = {
 
 type Cached = {
   score: number | null;
+  rerankedAt?: Date | null;
   matchedSkills: string[];
   gaps: string[];
   explanation: string | null;
@@ -104,87 +115,40 @@ function toView(row: RecallRow, cached: Cached | undefined): MatchView {
 
 /**
  * Semantic matches for a CV: pgvector recall of 50 jobs, then one AI re-rank of the top 10 that
- * have no cached score (cached in MatchResult). If the re-rank cannot run (AI failure or the daily
- * limit), the usage unit is refunded and vector-only results are returned.
+ * were never sent to the re-rank for this CV (results cached in MatchResult; a job the answer
+ * left out is recorded as attempted and not sent again). If the re-rank cannot run (AI failure
+ * or the daily limit), the usage unit is refunded and vector-only results are returned. After an
+ * AI failure the CV's re-rank pauses for RERANK_FAILURE_COOLDOWN_MS.
  */
 export async function findMatches(
   userId: string,
   isDemo: boolean,
   opts: { cvId?: string; filters?: MatchFilters } = {},
   deps: AiDeps = {},
-): Promise<MatchView[]> {
+): Promise<MatchesResult> {
   const { cv, profile } = await loadCv(userId, opts.cvId);
   const rows = await recall(userId, cv.id, opts.filters);
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return { matches: [], rerankStatus: "ok" };
 
   const cachedRows = await db.matchResult.findMany({
     where: { cvId: cv.id, jobId: { in: rows.map((r) => r.id) } },
   });
   const cached = new Map<string, Cached>(cachedRows.map((m) => [m.jobId, m]));
 
-  // A demo user still on the cloned template CV sees the pre-scored matches instantly, with no
-  // AI call: re-ranking resumes once they analyse their own CV.
-  const demoTemplate = isDemo && isTemplateCv(cv);
-  const batch = rows.slice(0, RERANK_BATCH).filter((r) => cached.get(r.id)?.score == null);
-  if (batch.length > 0 && !demoTemplate) {
-    let consumed = false;
-    try {
-      await consumeUsage(userId, "MATCH_RERANK", isDemo);
-      consumed = true;
-      const result = await generateStructured(
-        {
-          purpose: "matching.rerank",
-          userId,
-          model: "fast",
-          schema: RerankResult,
-          system: rerankSystem(),
-          prompt: rerankPrompt(
-            profileToText(profile),
-            batch.map((r) => ({
-              id: r.id,
-              title: r.title,
-              company: r.company,
-              description: r.snippet,
-            })),
-          ),
-          mockKey: "matching.rerank",
-          maxOutputTokens: MAX_OUTPUT_TOKENS.rerank,
-        },
-        deps,
-      );
-      const sent = new Map(batch.map((r) => [r.id, r]));
-      const fresh = result.results.filter((r) => sent.has(r.jobId));
-      await db.$transaction(
-        fresh.map((r) => {
-          const data = {
-            vectorScore: sent.get(r.jobId)!.sim,
-            score: r.score,
-            matchedSkills: r.matchedSkills,
-            gaps: r.gaps,
-            explanation: r.explanation,
-          };
-          return db.matchResult.upsert({
-            where: { cvId_jobId: { cvId: cv.id, jobId: r.jobId } },
-            create: { cvId: cv.id, jobId: r.jobId, ...data },
-            update: data,
-          });
-        }),
-      );
-      for (const r of fresh) cached.set(r.jobId, r);
-    } catch (e) {
-      if (consumed) {
-        try {
-          await refundUsage(userId, "MATCH_RERANK");
-        } catch (refundError) {
-          console.error("[matching] failed to refund usage", describeError(refundError));
-        }
-      }
-      // LimitExceededError, AI_FAILED, BUDGET_EXHAUSTED: fall back to vector-only results.
-      if (!(e instanceof AppError)) throw e;
-      if (!(e instanceof LimitExceededError)) {
-        console.error("[matching] re-rank failed", describeError(e));
-      }
-    }
+  const batch = rows.slice(0, RERANK_BATCH).filter((r) => {
+    const c = cached.get(r.id);
+    return c?.score == null && c?.rerankedAt == null;
+  });
+  let rerankStatus: RerankStatus = "ok";
+  if (batch.length > 0) {
+    // A demo user still on the cloned template CV sees the pre-scored matches instantly, with no
+    // AI call: re-ranking resumes once they analyse their own CV.
+    const coolingDown =
+      cv.rerankFailedAt !== null &&
+      Date.now() - cv.rerankFailedAt.getTime() < RERANK_FAILURE_COOLDOWN_MS;
+    if (isDemo && isTemplateCv(cv)) rerankStatus = "skipped";
+    else if (coolingDown) rerankStatus = "failed";
+    else rerankStatus = await rerank(userId, isDemo, cv.id, profile, batch, cached, deps);
   }
 
   const views = rows.map((r) => toView(r, cached.get(r.id)));
@@ -192,7 +156,92 @@ export async function findMatches(
     .filter((v) => v.score !== null)
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.vectorScore - a.vectorScore);
   const rest = views.filter((v) => v.score === null);
-  return [...ranked, ...rest];
+  return { matches: [...ranked, ...rest], rerankStatus };
+}
+
+/** One AI re-rank of `batch`; stores every sent job (scored or not) and updates `cached`. */
+async function rerank(
+  userId: string,
+  isDemo: boolean,
+  cvId: string,
+  profile: CvProfile,
+  batch: RecallRow[],
+  cached: Map<string, Cached>,
+  deps: AiDeps,
+): Promise<RerankStatus> {
+  let consumed = false;
+  try {
+    await consumeUsage(userId, "MATCH_RERANK", isDemo);
+    consumed = true;
+    const result = await generateStructured(
+      {
+        purpose: "matching.rerank",
+        userId,
+        model: "fast",
+        schema: RerankResult,
+        system: rerankSystem(),
+        prompt: rerankPrompt(
+          profileToText(profile),
+          batch.map((r) => ({
+            id: r.id,
+            title: r.title,
+            company: r.company,
+            description: r.snippet,
+          })),
+        ),
+        mockKey: "matching.rerank",
+        maxOutputTokens: MAX_OUTPUT_TOKENS.rerank,
+      },
+      deps,
+    );
+    const returned = new Map(result.results.map((r) => [r.jobId, r]));
+    const now = new Date();
+    const stored = batch.map((row): [string, Cached & { vectorScore: number }] => {
+      const r = returned.get(row.id);
+      return [
+        row.id,
+        {
+          vectorScore: row.sim,
+          score: r ? Math.round(r.score) : null,
+          matchedSkills: r?.matchedSkills ?? [],
+          gaps: r?.gaps ?? [],
+          explanation: r?.explanation ?? null,
+          rerankedAt: now,
+        },
+      ];
+    });
+    await db.$transaction(
+      stored.map(([jobId, data]) =>
+        db.matchResult.upsert({
+          where: { cvId_jobId: { cvId, jobId } },
+          create: { cvId, jobId, ...data },
+          update: data,
+        }),
+      ),
+    );
+    for (const [jobId, data] of stored) cached.set(jobId, data);
+    return "ok";
+  } catch (e) {
+    if (consumed) {
+      try {
+        await refundUsage(userId, "MATCH_RERANK");
+      } catch (refundError) {
+        console.error("[matching] failed to refund usage", describeError(refundError));
+      }
+    }
+    // LimitExceededError, AI_FAILED, BUDGET_EXHAUSTED: fall back to vector-only results.
+    if (!(e instanceof AppError)) throw e;
+    if (e instanceof LimitExceededError) return "limit";
+    console.error("[matching] re-rank failed", describeError(e));
+    if (e.code === "AI_FAILED") {
+      await db.cv
+        .updateMany({ where: { id: cvId, userId }, data: { rerankFailedAt: new Date() } })
+        .catch((err: unknown) =>
+          console.error("[matching] failed to store the failure time", describeError(err)),
+        );
+    }
+    return "failed";
+  }
 }
 
 /** The cached match of the user's active CV for one job. Makes no AI call and uses no usage. */

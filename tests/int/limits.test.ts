@@ -26,9 +26,7 @@ describe("consumeUsage", () => {
 
   it("rejects a demo user's 2nd CV analysis", async () => {
     await consumeUsage(UID, "CV_ANALYSIS", true);
-    await expect(consumeUsage(UID, "CV_ANALYSIS", true)).rejects.toBeInstanceOf(
-      LimitExceededError,
-    );
+    await expect(consumeUsage(UID, "CV_ANALYSIS", true)).rejects.toBeInstanceOf(LimitExceededError);
   });
 
   it("gives exactly 3 successes out of 20 parallel calls", async () => {

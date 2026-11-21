@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AppError } from "@/lib/errors";
 import { EmptyState } from "@/components/app/empty-state";
 import { requireUser } from "@/server/auth/session";
-import { findMatches, type MatchView } from "@/server/matching/match";
+import { findMatches, type MatchesResult, type RerankStatus } from "@/server/matching/match";
 import { PageSkeleton } from "@/components/app/page-skeleton";
 
 function NoCv() {
@@ -22,27 +22,32 @@ function NoCv() {
   );
 }
 
+const RERANK_NOTICE: Record<RerankStatus, string | null> = {
+  ok: null,
+  skipped: null,
+  limit:
+    "Daily AI scoring limit reached, so new jobs are ordered by similarity only. Limits reset at 00:00 UTC.",
+  failed: "AI scoring is unavailable right now, so new jobs are ordered by similarity only.",
+};
+
 async function Matches() {
   const user = await requireUser();
-  let matches: MatchView[];
+  let result: MatchesResult;
   try {
-    matches = await findMatches(user.id, user.isDemo);
+    result = await findMatches(user.id, user.isDemo);
   } catch (e) {
     if (e instanceof AppError && e.code === "CV_NOT_READY") return <NoCv />;
     throw e;
   }
+  const { matches, rerankStatus } = result;
   if (matches.length === 0) {
     return <EmptyState>No jobs to match yet. Check back after the next job update.</EmptyState>;
   }
   const now = new Date();
-  const reranked = matches.some((m) => m.score !== null);
+  const notice = RERANK_NOTICE[rerankStatus];
   return (
     <>
-      {!reranked && (
-        <p className="text-sm text-muted-foreground">
-          AI scoring is unavailable right now, so these jobs are ordered by similarity only.
-        </p>
-      )}
+      {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
       <ul className="grid gap-3">
         {matches.map((m) => (
           <li key={m.job.id}>
