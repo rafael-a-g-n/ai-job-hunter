@@ -6,8 +6,9 @@ export type ModelId = (typeof MODELS)[ModelTier];
 /**
  * USD per million tokens, the single source of truth for cost tracking.
  * Source: https://platform.claude.com/docs/en/about-claude/pricing (checked 2026-11-21).
- * Haiku 5.5 is priced at $0.50 / $2.50 for prompts over 100k tokens; this app never sends
- * prompts that large, so only the standard tier is listed.
+ * Haiku 5.5 is priced at $0.50 / $2.50 for prompts over 100k tokens. No prompt here gets near
+ * that: the largest is a CV analysis, whose CV text is capped at 40,000 characters (about 10k
+ * tokens, see MAX_CV_PROMPT_CHARS), so only the standard tier is listed.
  */
 export const PRICES: Record<ModelId, { input: number; output: number }> = {
   "claude-haiku-5-5": { input: 0.1, output: 0.5 },

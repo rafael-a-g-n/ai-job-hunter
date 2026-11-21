@@ -20,6 +20,9 @@ export function cvAnalysisSystem(language: AnalysisLanguage): string {
   ].join(" ");
 }
 
+/** CV text sent to the AI is capped (about 10k tokens); the full text stays in `rawText`. */
+export const MAX_CV_PROMPT_CHARS = 40_000;
+
 export function cvAnalysisPrompt(rawText: string): string {
-  return `CV text:\n<cv>\n${rawText}\n</cv>`;
+  return `CV text:\n<cv>\n${rawText.slice(0, MAX_CV_PROMPT_CHARS)}\n</cv>`;
 }
