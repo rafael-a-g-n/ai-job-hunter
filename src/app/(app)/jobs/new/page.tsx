@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ManualJobForm } from "@/components/jobs/manual-job-form";
 
+// The form's server action normalizes the posting with an AI call.
+export const maxDuration = 60;
+
 export default function NewJobPage() {
   return (
     <main className="mx-auto grid w-full max-w-3xl gap-6 p-6">

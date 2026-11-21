@@ -12,6 +12,9 @@ import { getCv } from "@/server/cv/queries";
 import { CvAnalysis, CvProfile } from "@/server/cv/schemas";
 import { PageSkeleton } from "@/components/app/page-skeleton";
 
+// The re-analyse action makes an AI call of up to two 60 s attempts, like the upload on /cv.
+export const maxDuration = 120;
+
 async function CvDetail({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, user] = await Promise.all([params, requireUser()]);
   const cv = await getCv(user.id, id).catch((e: unknown) => {

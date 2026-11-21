@@ -8,6 +8,7 @@ import { requireUser } from "@/server/auth/session";
 import { listCvs } from "@/server/cv/queries";
 import { PageSkeleton } from "@/components/app/page-skeleton";
 
+// Upload then analysis: an AI call of up to two 60 s attempts.
 export const maxDuration = 120;
 
 async function CvList() {

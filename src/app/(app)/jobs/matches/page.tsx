@@ -9,6 +9,9 @@ import { requireUser } from "@/server/auth/session";
 import { findMatches, type MatchesResult, type RerankStatus } from "@/server/matching/match";
 import { PageSkeleton } from "@/components/app/page-skeleton";
 
+// Rendering may run an AI re-rank (and a lazy CV embedding).
+export const maxDuration = 60;
+
 function NoCv() {
   return (
     <Card>
