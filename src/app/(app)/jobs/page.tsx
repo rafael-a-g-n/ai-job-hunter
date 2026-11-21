@@ -1,0 +1,85 @@
+import Link from "next/link";
+import { Suspense } from "react";
+import { JobCard } from "@/components/jobs/job-card";
+import { JOB_SOURCES, JobFilters } from "@/components/jobs/job-filters";
+import { Pagination } from "@/components/jobs/pagination";
+import { requireUser } from "@/server/auth/session";
+import { savedJobIds } from "@/server/jobs/saved";
+import { searchJobs } from "@/server/jobs/search";
+
+type Params = Record<string, string | string[] | undefined>;
+
+function first(value: string | string[] | undefined): string {
+  return (Array.isArray(value) ? value[0] : value) ?? "";
+}
+
+async function Results({ searchParams }: { searchParams: Promise<Params> }) {
+  const [sp, user] = await Promise.all([searchParams, requireUser()]);
+  const q = first(sp.q).trim().slice(0, 200);
+  const location = first(sp.location).trim().slice(0, 200);
+  const remote = first(sp.remote) === "1";
+  const sourceParam = first(sp.source);
+  const source = JOB_SOURCES.find((s) => s === sourceParam);
+  const pageNumber = Number.parseInt(first(sp.page), 10);
+
+  const result = await searchJobs(user.id, {
+    text: q || undefined,
+    location: location || undefined,
+    remote: remote || undefined,
+    source,
+    page: Number.isNaN(pageNumber) ? 1 : pageNumber,
+  });
+  const saved = await savedJobIds(
+    user.id,
+    result.items.map((j) => j.id),
+  );
+  const now = new Date();
+
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (location) params.set("location", location);
+  if (remote) params.set("remote", "1");
+  if (source) params.set("source", source);
+
+  return (
+    <>
+      <JobFilters q={q} location={location} remote={remote} source={source ?? ""} />
+      <p className="text-sm text-muted-foreground">
+        {result.total} {result.total === 1 ? "job" : "jobs"} found
+      </p>
+      {result.items.length === 0 ? (
+        <p className="text-sm">No jobs match these filters.</p>
+      ) : (
+        <ul className="grid gap-3">
+          {result.items.map((job) => (
+            <li key={job.id}>
+              <JobCard job={job} saved={saved.has(job.id)} now={now} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <Pagination
+        page={result.page}
+        pageSize={result.pageSize}
+        total={result.total}
+        params={params}
+      />
+    </>
+  );
+}
+
+export default function JobsPage({ searchParams }: PageProps<"/jobs">) {
+  return (
+    <main className="mx-auto grid w-full max-w-3xl gap-6 p-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Jobs</h1>
+        <Link href="/jobs/new" className="text-sm underline underline-offset-4">
+          Paste a job
+        </Link>
+      </div>
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading jobs...</p>}>
+        <Results searchParams={searchParams} />
+      </Suspense>
+    </main>
+  );
+}
