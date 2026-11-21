@@ -62,7 +62,8 @@ async function topFromSeed(vector: number[], limit: number): Promise<Candidate[]
 async function main() {
   const { extractText, PDF_MIME } = await import("../src/server/cv/parse");
   const { cvAnalysisPrompt, cvAnalysisSystem } = await import("../src/server/cv/prompts");
-  const { CvAnalysisResult, profileToText } = await import("../src/server/cv/schemas");
+  const { clampAnalysisResult, CvAnalysisAiResult, profileToText } =
+    await import("../src/server/cv/schemas");
   const { generateStructured } = await import("../src/server/ai/structured");
   const { streamAiText } = await import("../src/server/ai/stream");
   const { MAX_OUTPUT_TOKENS } = await import("../src/server/ai/models");
@@ -75,11 +76,11 @@ async function main() {
   const file = readFileSync(path.join(ROOT, "tests/fixtures/cv/sample.pdf"));
   const rawText = await extractText(file, PDF_MIME);
 
-  const { profile, analysis } = await generateStructured(
+  const raw = await generateStructured(
     {
       purpose: "demo.template.cv",
       model: "fast",
-      schema: CvAnalysisResult,
+      schema: CvAnalysisAiResult,
       system: cvAnalysisSystem("en"),
       prompt: cvAnalysisPrompt(rawText),
       mockKey: "cv.analysis",
@@ -87,6 +88,7 @@ async function main() {
     },
     noDb,
   );
+  const { profile, analysis } = clampAnalysisResult(raw);
 
   const [vector] = await getEmbedder().embed([profileToText(profile)], "query");
   let top = await topFromDb(vector, MATCH_COUNT);

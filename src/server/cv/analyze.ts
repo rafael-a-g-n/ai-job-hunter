@@ -7,7 +7,7 @@ import { consumeUsage, refundUsage } from "@/server/limits/usage";
 import { cvAnalysisPrompt, cvAnalysisSystem, type AnalysisLanguage } from "./prompts";
 import { tryEmbedProfile } from "./embedding";
 import { getCv } from "./queries";
-import { CvAnalysisResult, CvProfile } from "./schemas";
+import { clampAnalysisResult, CvAnalysisAiResult, CvProfile } from "./schemas";
 import { MAX_OUTPUT_TOKENS } from "@/server/ai/models";
 
 const GENERIC_FAILURE = "The analysis failed. Please try again.";
@@ -58,12 +58,12 @@ export async function analyzeCv(
   }
 
   try {
-    const result = await generateStructured(
+    const raw = await generateStructured(
       {
         purpose: "cv.analysis",
         userId,
         model: "fast",
-        schema: CvAnalysisResult,
+        schema: CvAnalysisAiResult,
         system: cvAnalysisSystem(language),
         prompt: cvAnalysisPrompt(cv.rawText ?? ""),
         mockKey: "cv.analysis",
@@ -71,6 +71,7 @@ export async function analyzeCv(
       },
       deps,
     );
+    const result = clampAnalysisResult(raw);
     const embedding = await tryEmbedProfile(result.profile);
     return await db.$transaction(async (tx) => {
       // NULL when embedding failed: the old vector no longer matches the new profile.

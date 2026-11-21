@@ -314,3 +314,27 @@ describe("embedding failures", () => {
     await expect(findMatches(UID, false, {}, noAi)).rejects.toThrow("voyage down");
   });
 });
+
+describe("rich CVs", () => {
+  it("accepts an answer over the list caps in one attempt and stores it clamped", async () => {
+    const rich = structuredClone(MOCK_FIXTURES["cv.analysis"]) as CvAnalysisResult;
+    const skill = rich.profile.skills[0];
+    rich.profile.skills = Array.from({ length: 90 }, (_, i) => ({ ...skill, name: `S${i}` }));
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [{ type: "text" as const, text: JSON.stringify(rich) }],
+        finishReason: { unified: "stop" as const, raw: "stop" },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        warnings: [],
+      }),
+    });
+    const cv = await makeCv();
+    const result = await analyzeCv(UID, cv.id, "en", { ...noAi, model });
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(result.status).toBe("ANALYZED");
+    expect((result.profile as { skills: unknown[] }).skills).toHaveLength(80);
+  });
+});
