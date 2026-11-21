@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import { postedAgo, sourceLabel } from "@/components/jobs/posted-ago";
 import { DeleteJobButton } from "@/components/jobs/delete-job-button";
 import { SaveButton } from "@/components/jobs/save-button";
+import { MatchDetails } from "@/components/matching/match-details";
+import { ScoreBadge } from "@/components/matching/score-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotFoundError } from "@/lib/errors";
@@ -11,6 +13,7 @@ import { safeExternalUrl } from "@/lib/safe-url";
 import { requireUser } from "@/server/auth/session";
 import { isJobSaved } from "@/server/jobs/saved";
 import { getJob } from "@/server/jobs/search";
+import { getMatchForJob } from "@/server/matching/match";
 
 async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, user] = await Promise.all([params, requireUser()]);
@@ -18,7 +21,10 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
     if (e instanceof NotFoundError) notFound();
     throw e;
   });
-  const saved = await isJobSaved(user.id, job.id);
+  const [saved, match] = await Promise.all([
+    isJobSaved(user.id, job.id),
+    getMatchForJob(user.id, job.id),
+  ]);
   const now = new Date();
   const jobUrl = safeExternalUrl(job.url);
   const canDelete = job.source === "MANUAL" && job.ownerId === user.id;
@@ -59,7 +65,17 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
         )}
       </div>
 
-      {/* SLOT (Task 12): match panel goes here. */}
+      {match && match.score !== null && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Your match</CardTitle>
+            <ScoreBadge score={match.score} />
+          </CardHeader>
+          <CardContent>
+            <MatchDetails match={match} />
+          </CardContent>
+        </Card>
+      )}
       {/* SLOT (Task 13): "Write cover letter" button goes here. */}
 
       <Card>

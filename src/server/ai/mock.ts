@@ -3,7 +3,7 @@ import { simulateReadableStream } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 
 /** Add a key here (and its fixture below) when a later task needs a mocked AI call. */
-export type MockKey = "test.echo" | "cv.analysis" | "jobs.normalize";
+export type MockKey = "test.echo" | "cv.analysis" | "jobs.normalize" | "matching.rerank";
 
 /** Deterministic outputs used when AI_PROVIDER=mock. Strings stream as-is, objects as JSON. */
 export const MOCK_FIXTURES: Record<MockKey, unknown> = {
@@ -15,6 +15,20 @@ export const MOCK_FIXTURES: Record<MockKey, unknown> = {
     remote: true,
     description:
       "We are looking for a Frontend Engineer to build our customer-facing web app with React and TypeScript. You will work with design and product, write tests and improve performance. Hybrid or fully remote within Europe.",
+  },
+  // A template: the mock expands it into one entry per `<job id="...">` found in the prompt
+  // (see expandRerank), because real job ids are only known at run time.
+  "matching.rerank": {
+    results: [
+      {
+        jobId: "<job id>",
+        score: 88,
+        matchedSkills: ["React", "TypeScript"],
+        gaps: ["GraphQL"],
+        explanation:
+          "Strong overlap with the required frontend stack; GraphQL experience is missing.",
+      },
+    ],
   },
   "cv.analysis": {
     profile: {
@@ -89,32 +103,64 @@ const usage = {
   outputTokens: { total: 20, text: 20, reasoning: 0 },
 };
 
+const RERANK_STEP = 6;
+const RERANK_FLOOR = 30;
+
+/** One result per job id in the prompt, scores falling by RERANK_STEP in prompt order. */
+function expandRerank(template: unknown, promptText: string): unknown {
+  const entry = (template as { results: Record<string, unknown>[] }).results[0];
+  const ids = [...promptText.matchAll(/<job id="([^"]+)">/g)].map((m) => m[1]);
+  return {
+    results: ids.map((jobId, i) => ({
+      ...entry,
+      jobId,
+      score: Math.max(RERANK_FLOOR, (entry.score as number) - i * RERANK_STEP),
+    })),
+  };
+}
+
+function promptToText(prompt: unknown): string {
+  if (!Array.isArray(prompt)) return "";
+  return prompt
+    .flatMap((m: { content?: unknown }) => (Array.isArray(m.content) ? m.content : []))
+    .map((part: { type?: string; text?: string }) =>
+      part.type === "text" ? (part.text ?? "") : "",
+    )
+    .join("\n");
+}
+
 export function mockModel(mockKey: MockKey): LanguageModelV4 {
   if (!Object.hasOwn(MOCK_FIXTURES, mockKey)) {
     throw new Error(`No mock fixture for "${mockKey}". Add it to MOCK_FIXTURES.`);
   }
   const fixture = MOCK_FIXTURES[mockKey];
-  const text = typeof fixture === "string" ? fixture : JSON.stringify(fixture);
+  const render = (promptText: string): string => {
+    const value = mockKey === "matching.rerank" ? expandRerank(fixture, promptText) : fixture;
+    return typeof value === "string" ? value : JSON.stringify(value);
+  };
   const finishReason = { unified: "stop", raw: "stop" } as const;
 
   return new MockLanguageModelV4({
     provider: "mock",
     modelId: `mock:${mockKey}`,
-    doGenerate: async () => ({
-      content: [{ type: "text", text }],
+    doGenerate: async (options) => ({
+      content: [{ type: "text", text: render(promptToText(options.prompt)) }],
       finishReason,
       usage,
       warnings: [],
     }),
-    doStream: async () => ({
-      stream: simulateReadableStream({
-        chunks: [
-          { type: "text-start", id: "t" },
-          { type: "text-delta", id: "t", delta: text },
-          { type: "text-end", id: "t" },
-          { type: "finish", finishReason, usage },
-        ],
-      }),
-    }),
+    doStream: async (options) => {
+      const text = render(promptToText(options.prompt));
+      return {
+        stream: simulateReadableStream({
+          chunks: [
+            { type: "text-start", id: "t" },
+            { type: "text-delta", id: "t", delta: text },
+            { type: "text-end", id: "t" },
+            { type: "finish", finishReason, usage },
+          ],
+        }),
+      };
+    },
   });
 }

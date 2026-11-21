@@ -73,9 +73,14 @@ export default function JobsPage({ searchParams }: PageProps<"/jobs">) {
     <main className="mx-auto grid w-full max-w-3xl gap-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Jobs</h1>
-        <Link href="/jobs/new" className="text-sm underline underline-offset-4">
-          Paste a job
-        </Link>
+        <div className="flex items-center gap-4 text-sm">
+          <Link href="/jobs/matches" className="underline underline-offset-4">
+            Best matches
+          </Link>
+          <Link href="/jobs/new" className="underline underline-offset-4">
+            Paste a job
+          </Link>
+        </div>
       </div>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading jobs...</p>}>
         <Results searchParams={searchParams} />
