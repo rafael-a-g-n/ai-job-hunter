@@ -43,12 +43,54 @@ describe("getDashboard", () => {
   });
 
   it("does not show another user's data", async () => {
-    await createDemoUser("1.1.1.1");
+    // The demo user owns a CV, saved jobs, scored matches and a letter.
+    const { userId: demoId } = await createDemoUser("1.1.1.1");
+    const demoCv = await db.cv.findFirstOrThrow({ where: { userId: demoId } });
+    expect(await db.coverLetter.count({ where: { userId: demoId } })).toBe(1);
+
+    // The other user owns one of each, on a job the demo user also uses.
     await db.user.create({ data: { id: "other", name: "O", email: "o@example.com" } });
+    const cv = await db.cv.create({
+      data: {
+        userId: "other",
+        fileName: "other.pdf",
+        blobKey: "cv/other/k",
+        mimeType: "application/pdf",
+        sizeBytes: 1,
+        status: "ANALYZED",
+        isActive: true,
+        profile: demoCv.profile ?? {},
+        analysis: { ...(demoCv.analysis as object), overallScore: 42 },
+      },
+    });
+    const job = await db.job.findFirstOrThrow({ where: { saved: { some: { userId: demoId } } } });
+    await db.savedJob.create({ data: { userId: "other", jobId: job.id } });
+    await db.matchResult.create({
+      data: {
+        cvId: cv.id,
+        jobId: job.id,
+        vectorScore: 0.5,
+        score: 11,
+        matchedSkills: [],
+        gaps: [],
+      },
+    });
+    const letter = await db.coverLetter.create({
+      data: {
+        userId: "other",
+        cvId: cv.id,
+        jobId: job.id,
+        tone: "NEUTRAL",
+        language: "en",
+        length: "SHORT",
+        content: "Mine",
+      },
+    });
+
     const d = await getDashboard("other", false);
-    expect(d.activeCv).toBeNull();
-    expect(d.topMatches).toEqual([]);
-    expect(d.recentLetters).toEqual([]);
-    expect(d.savedJobsCount).toBe(0);
+    expect(d.activeCv).toMatchObject({ id: cv.id, fileName: "other.pdf", overallScore: 42 });
+    expect(d.topMatches.map((m) => [m.job.id, m.score])).toEqual([[job.id, 11]]);
+    expect(d.recentLetters.map((l) => l.id)).toEqual([letter.id]);
+    expect(d.savedJobsCount).toBe(1);
   });
 });
