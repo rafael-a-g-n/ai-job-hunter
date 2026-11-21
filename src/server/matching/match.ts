@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { AppError, LimitExceededError } from "@/lib/errors";
 import { describeError } from "@/server/ai/deps";
 import { generateStructured, type AiDeps } from "@/server/ai/structured";
+import { ensureCvEmbedding } from "@/server/cv/embedding";
 import { getActiveCv, getCv } from "@/server/cv/queries";
 import { isTemplateCv } from "@/server/demo/template";
 import { CvProfile, profileToText } from "@/server/cv/schemas";
@@ -127,6 +128,8 @@ export async function findMatches(
   deps: AiDeps = {},
 ): Promise<MatchesResult> {
   const { cv, profile } = await loadCv(userId, opts.cvId);
+  // An analysis whose embedding failed is saved without one; embed it now (no AI usage).
+  await ensureCvEmbedding(userId, cv.id, profile);
   const rows = await recall(userId, cv.id, opts.filters);
   if (rows.length === 0) return { matches: [], rerankStatus: "ok" };
 

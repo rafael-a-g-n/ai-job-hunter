@@ -37,6 +37,9 @@ async function Matches() {
     result = await findMatches(user.id, user.isDemo);
   } catch (e) {
     if (e instanceof AppError && e.code === "CV_NOT_READY") return <NoCv />;
+    if (e instanceof AppError && e.code === "EMBEDDING_FAILED") {
+      return <EmptyState>Matching is unavailable right now. Try again in a minute.</EmptyState>;
+    }
     throw e;
   }
   const { matches, rerankStatus } = result;

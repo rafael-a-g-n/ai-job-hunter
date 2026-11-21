@@ -17,7 +17,7 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
 | Service | Where | Env variables |
 |---|---|---|
 | Anthropic | console.anthropic.com, API keys. Set a spend limit there too. | `ANTHROPIC_API_KEY` |
-| Voyage AI | dash.voyageai.com, API keys (free tier) | `VOYAGE_API_KEY` |
+| Voyage AI | dash.voyageai.com, API keys. Add a payment method: without one the account is limited to 3 requests per minute, too few for ingest (the free token allowance still applies once a card is on file). | `VOYAGE_API_KEY` |
 | Adzuna | developer.adzuna.com, free app id and key (optional; the source is skipped without them) | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` |
 | Resend | resend.com: add and verify a sending domain (DNS records), then create an API key | `RESEND_API_KEY`, `EMAIL_FROM` |
 | Cloudflare Turnstile | Cloudflare dashboard, Turnstile, add a widget for your Vercel domain | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public), `TURNSTILE_SECRET_KEY` |

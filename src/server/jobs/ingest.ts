@@ -4,6 +4,7 @@ import { cleanupExpiredDemoUsers } from "@/server/demo/cleanup";
 import { templateJobHashes } from "@/server/demo/template";
 import { getEmbedder } from "@/server/embeddings/embedder";
 import { toPgVector } from "@/server/embeddings/vector";
+import { MAX_BATCH_INPUTS } from "@/server/embeddings/voyage";
 import { computeDedupeHash, getEnabledAdapters } from "./sources";
 import type { JobSourceAdapter, NormalizedJob } from "./sources";
 
@@ -66,7 +67,8 @@ export function embeddingText(j: {
 }
 
 const EMBED_REPAIR_CAP = 500;
-const EMBED_CHUNK = 100;
+// One Voyage request's worth (see MAX_BATCH_INPUTS), so a chunk is written as soon as it is embedded.
+const EMBED_CHUNK = MAX_BATCH_INPUTS;
 const REFRESH_CHUNK = 1000;
 
 /** Bulk-refreshes fetchedAt/expiresAt of known jobs; rows whose new expiry is already past are left alone. */

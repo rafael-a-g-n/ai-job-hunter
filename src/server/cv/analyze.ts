@@ -3,25 +3,21 @@ import { db } from "@/lib/db";
 import { AppError, NotFoundError } from "@/lib/errors";
 import { describeError } from "@/server/ai/deps";
 import { generateStructured, type AiDeps } from "@/server/ai/structured";
-import { getEmbedder } from "@/server/embeddings/embedder";
-import { toPgVector } from "@/server/embeddings/vector";
 import { consumeUsage, refundUsage } from "@/server/limits/usage";
 import { cvAnalysisPrompt, cvAnalysisSystem, type AnalysisLanguage } from "./prompts";
+import { tryEmbedProfile } from "./embedding";
 import { getCv } from "./queries";
-import { CvAnalysisResult, CvProfile, profileToText } from "./schemas";
+import { CvAnalysisResult, CvProfile } from "./schemas";
 import { MAX_OUTPUT_TOKENS } from "@/server/ai/models";
 
 const GENERIC_FAILURE = "The analysis failed. Please try again.";
 const STALE_CLAIM_MS = 5 * 60 * 1000;
 const NOT_READY = "This CV can't be analysed. Upload it again.";
 
-async function embedProfile(profile: CvProfile): Promise<string> {
-  const [vector] = await getEmbedder().embed([profileToText(profile)], "document");
-  return toPgVector(vector);
-}
-
 /**
  * Analyses a CV: one AI call (usage consumed first, refunded on failure), then embeds the profile.
+ * An embedding failure does not fail the paid analysis: the embedding is left NULL and computed
+ * lazily when matches are loaded.
  * Throws NotFoundError for another user's CV and AppError('CV_NOT_READY') for FAILED/ANALYZING.
  */
 export async function analyzeCv(
@@ -75,8 +71,9 @@ export async function analyzeCv(
       },
       deps,
     );
-    const embedding = await embedProfile(result.profile);
+    const embedding = await tryEmbedProfile(result.profile);
     return await db.$transaction(async (tx) => {
+      // NULL when embedding failed: the old vector no longer matches the new profile.
       await tx.$executeRaw`UPDATE "Cv" SET "embedding" = ${embedding}::vector WHERE "id" = ${cvId} AND "userId" = ${userId}`;
       // Scores were computed against the old profile.
       await tx.matchResult.deleteMany({ where: { cvId, cv: { userId } } });
@@ -131,7 +128,7 @@ export async function updateCvProfile(
   if (cv.status !== "ANALYZED") {
     throw new AppError("CV_NOT_READY", "Analyse this CV before editing its profile.");
   }
-  const embedding = await embedProfile(parsed);
+  const embedding = await tryEmbedProfile(parsed);
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`UPDATE "Cv" SET "embedding" = ${embedding}::vector WHERE "id" = ${cvId} AND "userId" = ${userId}`;
     await tx.matchResult.deleteMany({ where: { cvId, cv: { userId } } });

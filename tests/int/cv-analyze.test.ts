@@ -1,11 +1,28 @@
 import { MockLanguageModelV4 } from "ai/test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { AppError, LimitExceededError, NotFoundError } from "@/lib/errors";
 import { MOCK_FIXTURES } from "@/server/ai/mock";
 import { analyzeCv, updateCvProfile } from "@/server/cv/analyze";
 import { getActiveCv, getCv, listCvs } from "@/server/cv/queries";
+import { findMatches } from "@/server/matching/match";
 import type { CvAnalysisResult } from "@/server/cv/schemas";
+
+const embedControl = vi.hoisted(() => ({ fail: false }));
+vi.mock("@/server/embeddings/embedder", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/server/embeddings/embedder")>();
+  return {
+    ...orig,
+    getEmbedder: () =>
+      embedControl.fail
+        ? {
+            embed: async () => {
+              throw new Error("voyage down");
+            },
+          }
+        : orig.getEmbedder(),
+  };
+});
 
 const UID = "analyze-user";
 const noAi = { record: async () => {}, assertBudget: async () => {} };
@@ -52,6 +69,7 @@ const embeddingText = async (id: string) =>
   )[0].e;
 
 beforeEach(async () => {
+  embedControl.fail = false;
   await db.user.create({ data: { id: UID, name: "A", email: "a@example.com" } });
 });
 
@@ -254,5 +272,45 @@ describe("cached match invalidation", () => {
     await updateCvProfile(UID, cv.id, profile());
     expect(await matchCount(cv.id)).toBe(0);
     expect(await matchCount(other.id)).toBe(1);
+  });
+});
+
+describe("embedding failures", () => {
+  it("keeps a successful analysis when embedding fails, and embeds it lazily for matches", async () => {
+    const cv = await makeCv();
+    embedControl.fail = true;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await analyzeCv(UID, cv.id, "en", noAi);
+    spy.mockRestore();
+    expect(result.status).toBe("ANALYZED");
+    expect(result.analysis).toMatchObject({ overallScore: 78 });
+    expect(await embeddingSet(cv.id)).toBe(false);
+    expect(await usageCount()).toBe(1);
+
+    embedControl.fail = false;
+    await findMatches(UID, false, {}, noAi);
+    expect(await embeddingSet(cv.id)).toBe(true);
+  });
+
+  it("clears a stale embedding when re-embedding after an edit fails", async () => {
+    const cv = await makeCv();
+    await analyzeCv(UID, cv.id, "en", noAi);
+    embedControl.fail = true;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const edited = profile();
+    edited.headline = "Staff Engineer";
+    const updated = await updateCvProfile(UID, cv.id, edited);
+    spy.mockRestore();
+    expect((updated.profile as { headline: string }).headline).toBe("Staff Engineer");
+    expect(await embeddingSet(cv.id)).toBe(false);
+  });
+
+  it("findMatches fails cleanly when the lazy embedding fails too", async () => {
+    const cv = await makeCv();
+    embedControl.fail = true;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await analyzeCv(UID, cv.id, "en", noAi);
+    spy.mockRestore();
+    await expect(findMatches(UID, false, {}, noAi)).rejects.toThrow("voyage down");
   });
 });
