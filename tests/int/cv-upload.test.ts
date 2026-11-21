@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { AppError } from "@/lib/errors";
+import { AppError, NotFoundError } from "@/lib/errors";
+import { deleteCv } from "@/server/cv/delete";
 import { DOCX_MIME, PDF_MIME } from "@/server/cv/parse";
 import { uploadCv, UNREADABLE_CV_MESSAGE } from "@/server/cv/upload";
 import { getBlobStore } from "@/server/storage/blob-store";
@@ -109,5 +110,76 @@ describe("uploadCv", () => {
     const theirs = await uploadCv("other", file("sample.pdf", PDF_MIME));
     await uploadCv(UID, file("sample.pdf", PDF_MIME));
     expect((await db.cv.findUniqueOrThrow({ where: { id: theirs.id } })).isActive).toBe(true);
+  });
+});
+
+const blobExists = (key: string) =>
+  getBlobStore()
+    .get(key)
+    .then(
+      () => true,
+      (e: unknown) => {
+        if (e instanceof NotFoundError) return false;
+        throw e;
+      },
+    );
+
+describe("CV limits and storage", () => {
+  it("does not store the file of an unreadable CV", async () => {
+    const cv = await uploadCv(UID, file("scanned.pdf", PDF_MIME));
+    expect(cv.status).toBe("FAILED");
+    expect(await blobExists(cv.blobKey)).toBe(false);
+  });
+
+  it("rejects the 6th CV with CV_LIMIT and stores nothing", async () => {
+    for (let i = 0; i < 5; i++) await uploadCv(UID, file("sample.pdf", PDF_MIME));
+    const err = await uploadCv(UID, file("sample.pdf", PDF_MIME)).catch((e: unknown) => e);
+    expect(err).toMatchObject({
+      code: "CV_LIMIT",
+      userMessage: "You can keep up to 5 CVs. Delete one first.",
+    });
+    expect(await db.cv.count({ where: { userId: UID } })).toBe(5);
+  });
+
+  it("never passes the cap with parallel uploads", async () => {
+    for (let i = 0; i < 3; i++) await uploadCv(UID, file("sample.pdf", PDF_MIME));
+    const results = await Promise.allSettled(
+      [1, 2, 3, 4].map(() => uploadCv(UID, file("sample.pdf", PDF_MIME))),
+    );
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(2);
+    expect(await db.cv.count({ where: { userId: UID } })).toBe(5);
+  });
+});
+
+describe("deleteCv", () => {
+  it("deletes the CV and its file", async () => {
+    const cv = await uploadCv(UID, file("sample.pdf", PDF_MIME));
+    await deleteCv(UID, cv.id);
+    expect(await db.cv.count()).toBe(0);
+    expect(await blobExists(cv.blobKey)).toBe(false);
+  });
+
+  it("activates the most recent ANALYZED CV when the active one is deleted", async () => {
+    const older = await uploadCv(UID, file("sample.pdf", PDF_MIME));
+    const newer = await uploadCv(UID, file("sample.docx", DOCX_MIME));
+    const pending = await uploadCv(UID, file("sample.pdf", PDF_MIME));
+    await db.cv.updateMany({
+      where: { id: { in: [older.id, newer.id] } },
+      data: { status: "ANALYZED" },
+    });
+    await db.cv.updateMany({ data: { isActive: false } });
+    await db.cv.update({ where: { id: pending.id }, data: { isActive: true } });
+
+    await deleteCv(UID, pending.id);
+    const active = await db.cv.findMany({ where: { userId: UID, isActive: true } });
+    expect(active.map((c) => c.id)).toEqual([newer.id]);
+  });
+
+  it("gives another user's CV a NotFoundError and keeps it", async () => {
+    await db.user.create({ data: { id: "other", name: "O", email: "o@example.com" } });
+    const theirs = await uploadCv("other", file("sample.pdf", PDF_MIME));
+    await expect(deleteCv(UID, theirs.id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(await db.cv.count()).toBe(1);
+    expect(await blobExists(theirs.blobKey)).toBe(true);
   });
 });

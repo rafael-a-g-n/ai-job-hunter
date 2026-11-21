@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { AppError, LimitExceededError } from "@/lib/errors";
 import { requireUser } from "@/server/auth/session";
 import { analyzeCv, updateCvProfile } from "@/server/cv/analyze";
+import { deleteCv } from "@/server/cv/delete";
 import type { AnalysisLanguage } from "@/server/cv/prompts";
 import { CvProfile } from "@/server/cv/schemas";
 import { uploadCv } from "@/server/cv/upload";
@@ -74,4 +76,16 @@ export async function saveProfileAction(cvId: string, profile: unknown): Promise
   } catch (e) {
     return { ok: false, error: message(e), cvId };
   }
+}
+
+/** Deletes the user's CV and redirects to /cv; returns only on failure. */
+export async function deleteCvAction(cvId: string): Promise<{ ok: false; error: string }> {
+  const user = await requireUser();
+  try {
+    await deleteCv(user.id, cvId);
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+  revalidatePath("/cv");
+  redirect("/cv");
 }

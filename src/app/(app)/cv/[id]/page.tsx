@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AnalyzeButton } from "@/components/cv/analyze-button";
+import { DeleteCvButton } from "@/components/cv/delete-cv-button";
 import { ProfileEditor } from "@/components/cv/profile-editor";
 import { CvReport } from "@/components/cv/report";
 import { NotFoundError } from "@/lib/errors";
@@ -24,11 +25,14 @@ async function CvDetail({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{cv.fileName}</h1>
-        <Link href="/cv" className="text-sm text-muted-foreground underline underline-offset-4">
-          Back to your CVs
-        </Link>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">{cv.fileName}</h1>
+          <Link href="/cv" className="text-sm text-muted-foreground underline underline-offset-4">
+            Back to your CVs
+          </Link>
+        </div>
+        <DeleteCvButton cvId={cv.id} />
       </div>
 
       {cv.status === "ANALYZED" && analysis.success && profile.success ? (
