@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CvStatus {
+  UPLOADED
+  ANALYZING
+  ANALYZED
+  FAILED
+}
+
+enum JobSource {
+  ADZUNA
+  ARBEITNOW
+  REMOTIVE
+  MANUAL
+}
+
+enum Tone {
+  FORMAL
+  NEUTRAL
+  ENTHUSIASTIC
+}
+
+enum LetterLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+enum UsageAction {
+  CV_ANALYSIS
+  COVER_LETTER
+  MATCH_RERANK
+  JOB_NORMALIZE
+}
+
+// ---- Better Auth core tables (hand-written; verified against the CLI in Task 3) ----
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  isDemo        Boolean   @default(false)
+  demoExpiresAt DateTime?
+
+  sessions     Session[]
+  accounts     Account[]
+  cvs          Cv[]
+  savedJobs    SavedJob[]
+  coverLetters CoverLetter[]
+  usage        UsageCounter[]
+  aiCalls      AiCall[]
+  ownedJobs    Job[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---- Application tables ----
+
+model Cv {
+  id            String                      @id @default(cuid())
+  userId        String
+  user          User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName      String
+  blobKey       String
+  mimeType      String
+  sizeBytes     Int
+  rawText       String?
+  status        CvStatus                    @default(UPLOADED)
+  failureReason String?
+  isActive      Boolean                     @default(false)
+  profile       Json?
+  analysis      Json?
+  embedding     Unsupported("vector(1024)")?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  matches      MatchResult[]
+  coverLetters CoverLetter[]
+
+  @@index([userId])
+}
+
+model Job {
+  id          String                      @id @default(cuid())
+  source      JobSource
+  externalId  String?
+  dedupeHash  String                      @unique
+  title       String
+  company     String
+  location    String?
+  remote      Boolean                     @default(false)
+  description String
+  url         String?
+  salaryMin   Int?
+  salaryMax   Int?
+  currency    String?
+  postedAt    DateTime?
+  fetchedAt   DateTime                    @default(now())
+  expiresAt   DateTime
+  ownerId     String?
+  owner       User?                       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  embedding   Unsupported("vector(1024)")?
+
+  saved        SavedJob[]
+  matches      MatchResult[]
+  coverLetters CoverLetter[]
+
+  @@index([expiresAt])
+  @@index([ownerId])
+}
+
+model SavedJob {
+  userId    String
+  jobId     String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobId])
+}
+
+model MatchResult {
+  id            String   @id @default(cuid())
+  cvId          String
+  jobId         String
+  cv            Cv       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  vectorScore   Float
+  score         Int?
+  matchedSkills String[]
+  gaps          String[]
+  explanation   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([cvId, jobId])
+}
+
+model CoverLetter {
+  id        String       @id @default(cuid())
+  userId    String
+  cvId      String
+  jobId     String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cv        Cv           @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  job       Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  tone      Tone
+  language  String
+  length    LetterLength
+  content   String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+model UsageCounter {
+  userId String
+  action UsageAction
+  day    DateTime    @db.Date
+  count  Int         @default(0)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, action, day])
+}
+
+model AiCall {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose      String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Decimal  @db.Decimal(10, 6)
+  durationMs   Int
+  ok           Boolean
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model DemoSignup {
+  ipHash String
+  day    DateTime @db.Date
+  count  Int      @default(0)
+
+  @@id([ipHash, day])
+}
+
+model IngestRun {
+  id         String    @id @default(cuid())
+  source     JobSource
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  fetched    Int       @default(0)
+  inserted   Int       @default(0)
+  error      String?
+}

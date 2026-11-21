@@ -1,0 +1,44 @@
+import { describe, expect, it } from "vitest";
+import { parseEnv } from "@/lib/env";
+
+const valid = {
+  DATABASE_URL: "postgresql://u:p@localhost:5432/db",
+  APP_URL: "http://localhost:3000",
+  BETTER_AUTH_SECRET: "x".repeat(32),
+  AI_PROVIDER: "mock",
+  EMBEDDINGS_PROVIDER: "fake",
+  STORAGE_PROVIDER: "local",
+  MAIL_PROVIDER: "console",
+  EMAIL_FROM: "Job Hunter <noreply@example.com>",
+  CRON_SECRET: "cron-secret",
+};
+
+describe("parseEnv", () => {
+  it("throws when AI_PROVIDER is anthropic without ANTHROPIC_API_KEY", () => {
+    expect(() => parseEnv({ ...valid, AI_PROVIDER: "anthropic" })).toThrow(/ANTHROPIC_API_KEY/);
+  });
+
+  it("passes with the mock AI provider and no key", () => {
+    expect(() => parseEnv({ ...valid, AI_PROVIDER: "mock" })).not.toThrow();
+  });
+
+  it("requires the key of every selected real provider", () => {
+    expect(() => parseEnv({ ...valid, EMBEDDINGS_PROVIDER: "voyage" })).toThrow(/VOYAGE_API_KEY/);
+    expect(() => parseEnv({ ...valid, STORAGE_PROVIDER: "vercel-blob" })).toThrow(
+      /BLOB_READ_WRITE_TOKEN/,
+    );
+    expect(() => parseEnv({ ...valid, MAIL_PROVIDER: "resend" })).toThrow(/RESEND_API_KEY/);
+  });
+
+  it("defaults GLOBAL_DAILY_AI_BUDGET_USD to 5 and TURNSTILE_BYPASS to false", () => {
+    const env = parseEnv(valid);
+    expect(env.GLOBAL_DAILY_AI_BUDGET_USD).toBe(5);
+    expect(env.TURNSTILE_BYPASS).toBe(false);
+  });
+
+  it("coerces budget and bypass from strings", () => {
+    const env = parseEnv({ ...valid, GLOBAL_DAILY_AI_BUDGET_USD: "2.5", TURNSTILE_BYPASS: "true" });
+    expect(env.GLOBAL_DAILY_AI_BUDGET_USD).toBe(2.5);
+    expect(env.TURNSTILE_BYPASS).toBe(true);
+  });
+});
