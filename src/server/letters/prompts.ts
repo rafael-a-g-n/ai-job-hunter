@@ -1,4 +1,5 @@
 import type { Job, LetterLength, Tone } from "@/generated/prisma/client";
+import { defang, defangField } from "@/server/ai/defang";
 import { profileToText, type CvProfile } from "@/server/cv/schemas";
 
 export const LENGTH_WORDS: Record<LetterLength, number> = { SHORT: 150, MEDIUM: 250, LONG: 350 };
@@ -12,11 +13,6 @@ const TONE_GUIDE: Record<Tone, string> = {
 export const DESCRIPTION_CHARS = 4000;
 
 export type LetterOptions = { tone: Tone; language: "en" | "pt"; length: LetterLength };
-
-/** Removes our delimiter tags from untrusted text so it cannot close a block early. */
-function defang(text: string): string {
-  return text.replace(/<[/]?[ ]*(profile|job)(?![a-z])[^>]*>/gi, "");
-}
 
 export function buildLetterPrompt(
   profile: CvProfile,
@@ -44,8 +40,8 @@ export function buildLetterPrompt(
     "</profile>",
     "",
     "<job>",
-    `Job title: ${defang(job.title)}`,
-    `Company: ${defang(job.company)}`,
+    `Job title: ${defangField(job.title)}`,
+    `Company: ${defangField(job.company)}`,
     defang(job.description.slice(0, DESCRIPTION_CHARS)),
     "</job>",
     "",

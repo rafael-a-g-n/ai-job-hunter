@@ -1,3 +1,5 @@
+import { defang } from "@/server/ai/defang";
+
 export type AnalysisLanguage = "en" | "pt";
 
 const LANGUAGE_NAME: Record<AnalysisLanguage, string> = {
@@ -24,5 +26,5 @@ export function cvAnalysisSystem(language: AnalysisLanguage): string {
 export const MAX_CV_PROMPT_CHARS = 40_000;
 
 export function cvAnalysisPrompt(rawText: string): string {
-  return `CV text:\n<cv>\n${rawText.slice(0, MAX_CV_PROMPT_CHARS)}\n</cv>`;
+  return `CV text:\n<cv>\n${defang(rawText.slice(0, MAX_CV_PROMPT_CHARS))}\n</cv>`;
 }

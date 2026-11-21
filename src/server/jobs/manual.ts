@@ -1,6 +1,7 @@
 import { Prisma, type Job } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { AppError, NotFoundError } from "@/lib/errors";
+import { defang } from "@/server/ai/defang";
 import { describeError } from "@/server/ai/deps";
 import { generateStructured, type AiDeps } from "@/server/ai/structured";
 import { getEmbedder } from "@/server/embeddings/embedder";
@@ -42,7 +43,7 @@ export async function createManualJob(
         model: "fast",
         schema: NormalizedManualJob,
         system: SYSTEM,
-        prompt: `Job posting:\n<posting>\n${text}\n</posting>`,
+        prompt: `Job posting:\n<posting>\n${defang(text)}\n</posting>`,
         mockKey: "jobs.normalize",
         maxOutputTokens: MAX_OUTPUT_TOKENS.jobNormalize,
       },

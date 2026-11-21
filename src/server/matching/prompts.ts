@@ -1,3 +1,5 @@
+import { defang, defangField } from "@/server/ai/defang";
+
 export const DESCRIPTION_CHARS = 1500;
 
 export function rerankSystem(): string {
@@ -13,10 +15,11 @@ export function rerankSystem(): string {
 
 export type RerankJob = { id: string; title: string; company: string; description: string };
 
+/** Job text and the profile are untrusted: defanged, and title/company capped at 200 chars. */
 export function rerankPrompt(profileText: string, jobs: RerankJob[]): string {
   const blocks = jobs.map(
     (j) =>
-      `<job id="${j.id}">\n${j.title} at ${j.company}\n${j.description.slice(0, DESCRIPTION_CHARS)}\n</job>`,
+      `<job id="${j.id}">\n${defangField(j.title)} at ${defangField(j.company)}\n${defang(j.description.slice(0, DESCRIPTION_CHARS))}\n</job>`,
   );
-  return `Candidate profile:\n<profile>\n${profileText}\n</profile>\n\nJobs:\n${blocks.join("\n\n")}`;
+  return `Candidate profile:\n<profile>\n${defang(profileText)}\n</profile>\n\nJobs:\n${blocks.join("\n\n")}`;
 }
