@@ -3,7 +3,7 @@ import { JobSource } from "@/generated/prisma/client";
 import { env } from "@/lib/env";
 import { SOURCES_CONFIG } from "./config";
 import type { JobSourceAdapter, NormalizedJob } from "./types";
-import { getJson, parseDate, stripHtml } from "./util";
+import { getJson, parseItems, parseDate, stripHtml } from "./util";
 
 // Adzuna does not return a currency; it follows the country of the search.
 const CURRENCY: Record<string, string> = {
@@ -40,7 +40,6 @@ const jobSchema = z.object({
   salary_min: z.number().nullish(),
   salary_max: z.number().nullish(),
 });
-const responseSchema = z.object({ results: z.array(jobSchema) });
 
 export function adzunaUrl(
   country: string,
@@ -87,7 +86,7 @@ export function createAdzunaAdapter(creds: { appId: string; appKey: string }): J
         for (const query of SOURCES_CONFIG.adzuna.queries) {
           for (let page = 1; page <= SOURCES_CONFIG.adzuna.pages; page++) {
             const json = await getJson("Adzuna", adzunaUrl(country, page, query, creds), fetchFn);
-            for (const r of responseSchema.parse(json).results) {
+            for (const r of parseItems("Adzuna", json, "results", jobSchema)) {
               const job = mapJob(r, country);
               byId.set(job.externalId, job);
             }

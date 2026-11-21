@@ -2,7 +2,7 @@ import { z } from "zod";
 import { JobSource } from "@/generated/prisma/client";
 import { SOURCES_CONFIG } from "./config";
 import type { JobSourceAdapter, NormalizedJob } from "./types";
-import { getJson, parseDate, stripHtml } from "./util";
+import { getJson, parseItems, parseDate, stripHtml } from "./util";
 
 const jobSchema = z.object({
   slug: z.string(),
@@ -14,7 +14,6 @@ const jobSchema = z.object({
   location: z.string().default(""),
   created_at: z.number().optional(),
 });
-const responseSchema = z.object({ data: z.array(jobSchema) });
 
 export const arbeitnowAdapter: JobSourceAdapter = {
   source: JobSource.ARBEITNOW,
@@ -27,7 +26,7 @@ export const arbeitnowAdapter: JobSourceAdapter = {
         `https://www.arbeitnow.com/api/job-board-api?page=${page}`,
         fetchFn,
       );
-      for (const j of responseSchema.parse(json).data) {
+      for (const j of parseItems("Arbeitnow", json, "data", jobSchema)) {
         byId.set(j.slug, {
           source: JobSource.ARBEITNOW,
           externalId: j.slug,

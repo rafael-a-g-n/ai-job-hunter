@@ -2,7 +2,7 @@ import { z } from "zod";
 import { JobSource } from "@/generated/prisma/client";
 import { SOURCES_CONFIG } from "./config";
 import type { JobSourceAdapter } from "./types";
-import { getJson, parseDate, stripHtml } from "./util";
+import { getJson, parseItems, parseDate, stripHtml } from "./util";
 
 const jobSchema = z.object({
   id: z.union([z.number(), z.string()]),
@@ -13,7 +13,6 @@ const jobSchema = z.object({
   candidate_required_location: z.string().optional(),
   description: z.string().default(""),
 });
-const responseSchema = z.object({ jobs: z.array(jobSchema) });
 
 export const remotiveAdapter: JobSourceAdapter = {
   source: JobSource.REMOTIVE,
@@ -24,7 +23,7 @@ export const remotiveAdapter: JobSourceAdapter = {
       `https://remotive.com/api/remote-jobs?limit=${SOURCES_CONFIG.remotive.limit}`,
       fetchFn,
     );
-    return responseSchema.parse(json).jobs.map((j) => ({
+    return parseItems("Remotive", json, "jobs", jobSchema).map((j) => ({
       source: JobSource.REMOTIVE,
       externalId: String(j.id),
       title: stripHtml(j.title),

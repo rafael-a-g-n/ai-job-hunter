@@ -5,7 +5,7 @@ import { createAdzunaAdapter } from "@/server/jobs/sources/adzuna";
 import { arbeitnowAdapter } from "@/server/jobs/sources/arbeitnow";
 import { SOURCES_CONFIG } from "@/server/jobs/sources/config";
 import { remotiveAdapter } from "@/server/jobs/sources/remotive";
-import { computeDedupeHash, stripHtml } from "@/server/jobs/sources/util";
+import { computeDedupeHash, getJson, stripHtml } from "@/server/jobs/sources/util";
 
 function fixture(name: string): unknown {
   return JSON.parse(
@@ -250,5 +250,63 @@ describe("getEnabledAdapters", () => {
 
   it("includes Adzuna when both keys are set", async () => {
     expect(await enabled({ id: "a", key: "b" })).toEqual(["ADZUNA", "ARBEITNOW", "REMOTIVE"]);
+  });
+});
+
+describe("malformed data and timeouts", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("skips one broken Remotive item and maps the rest", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const raw = fixture("remotive") as { jobs: Record<string, unknown>[] };
+    const broken = { ...raw, jobs: [{ ...raw.jobs[0], title: undefined }, ...raw.jobs.slice(1)] };
+    const jobs = await remotiveAdapter.fetchJobs(asFetch(stubFetch(broken)));
+    expect(jobs).toHaveLength(raw.jobs.length - 1);
+    expect(warn).toHaveBeenCalledWith("Remotive: skipped 1 malformed jobs");
+  });
+
+  it("skips one broken Arbeitnow item", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const raw = fixture("arbeitnow") as { data: Record<string, unknown>[] };
+    const broken = { ...raw, data: [{ ...raw.data[0], slug: 5 }, ...raw.data.slice(1)] };
+    const jobs = await arbeitnowAdapter.fetchJobs(asFetch(stubFetch(broken)));
+    // same page returned for every request, deduped by slug
+    expect(jobs).toHaveLength(raw.data.length - 1);
+  });
+
+  it("skips one broken Adzuna item", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const raw = fixture("adzuna") as { results: Record<string, unknown>[] };
+    const broken = {
+      ...raw,
+      results: [{ ...raw.results[0], redirect_url: undefined }, ...raw.results.slice(1)],
+    };
+    const jobs = await createAdzunaAdapter({ appId: "a", appKey: "b" }).fetchJobs(
+      asFetch(stubFetch(broken)),
+    );
+    expect(jobs.map((j) => j.externalId)).toEqual(["4912345679", "4912345680"]);
+  });
+
+  it.each([
+    ["Remotive", () => remotiveAdapter.fetchJobs(asFetch(stubFetch({ nope: 1 })))],
+    ["Arbeitnow", () => arbeitnowAdapter.fetchJobs(asFetch(stubFetch({ data: "x" })))],
+    [
+      "Adzuna",
+      () => createAdzunaAdapter({ appId: "a", appKey: "b" }).fetchJobs(asFetch(stubFetch(null))),
+    ],
+  ])("throws naming %s on an invalid envelope", async (name, run) => {
+    await expect(run()).rejects.toThrow(`${name} response invalid`);
+  });
+
+  it("times out a hung request and names the source", async () => {
+    const hang = vi.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        }),
+    );
+    await expect(getJson("Remotive", "https://x.test", hang as never, 20)).rejects.toThrow(
+      "Remotive request failed: timeout",
+    );
   });
 });
