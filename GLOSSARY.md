@@ -10,7 +10,7 @@ Domain terms as the code and UI use them.
 
 **Job**: A posting stored in our database, either ingested from a source (Adzuna, Arbeitnow, Remotive) or a Manual job. Ingested jobs are embedded once and expire 30 days after `postedAt` (or `fetchedAt`).
 
-**Manual job**: A job the user pasted as text. The AI normalizes it into a Job owned by that user. It is visible only to its owner and never expires.
+**Manual job**: A job the user pasted as text. The AI normalizes it into a Job owned by that user. It is visible only to its owner and expires 365 days after it was added.
 
 **Match**: The pairing of a CV with a Job: a vector similarity, plus, once re-ranked, a 0 to 100 score, matched skills, gaps and an explanation. Re-ranked matches are cached per CV and job.
 

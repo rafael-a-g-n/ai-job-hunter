@@ -46,7 +46,7 @@ Next.js 16 (App Router, `cacheComponents`), React 19, TypeScript (strict), Tailw
 1. **Ingest.** Every 6 hours a GitHub Actions workflow calls `POST /api/cron/ingest`. Each source is fetched with a 25 s deadline (Remotive at most once per 24 h). Jobs are deduplicated by a hash of title, company and location, embedded once, and expire 30 days after posting. A failing source is reported and skipped; the others still run. See [ADR 2](docs/adr/0002-ingest-not-live-search.md).
 2. **Embeddings.** Each job and each analysed CV profile is embedded into a 1024-dimension vector stored in a pgvector column (HNSW index, cosine distance).
 3. **Recall.** Matching takes the 50 jobs nearest to the CV vector, restricted to non-expired jobs that are public or owned by the user.
-4. **Re-rank.** One AI call scores the top 10 recalled jobs that have no cached score, returning a score, matched skills, gaps and an explanation. Results are cached per CV and job, so repeat visits cost nothing. If the call fails or the daily limit is hit, the usage unit is refunded and vector order is shown.
+4. **Re-rank.** One AI call scores the top 10 recalled jobs that were never sent to the re-rank for this CV, returning a score, matched skills, gaps and an explanation. Results are cached per CV and job (a job the answer leaves out is recorded as attempted), so repeat visits cost nothing. If the daily limit is already reached, no unit is consumed and vector order is shown, with a note saying so. If the call fails, the consumed unit is refunded, vector order is shown, and that CV's re-rank pauses for 10 minutes.
 
 ## Run locally
 
@@ -81,6 +81,8 @@ npm run test:e2e       # Playwright; builds the app and starts it with all fakes
 ```
 
 Integration tests apply migrations with `migrate deploy`, truncate tables between tests, and refuse to run against anything but the local test database. All tests run with fakes, so no keys or network are needed.
+
+The e2e tests read verification and reset emails through `GET /api/test/mail`, a test-only route that returns what the console mailer "sent". It answers 404 unless both `E2E=1` (set only by the Playwright config) and `MAIL_PROVIDER=console`, so it does not exist in a real deployment.
 
 ## Design decisions
 
