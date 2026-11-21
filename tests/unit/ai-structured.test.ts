@@ -147,4 +147,35 @@ describe("generateStructured", () => {
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it("never logs prompt contents carried by provider errors", async () => {
+    const MARKER = "SECRET-CV-CONTENT-123";
+    const providerError = Object.assign(new Error("500 upstream"), {
+      statusCode: 500,
+      requestBodyValues: { messages: [{ content: MARKER }] },
+      prompt: MARKER,
+    });
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw providerError;
+      },
+    });
+    const { deps, opts } = setup();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const err = await generateStructured(opts, {
+      ...deps,
+      model,
+      record: async () => {
+        throw Object.assign(new Error("db down"), { prompt: MARKER });
+      },
+    }).catch((e: unknown) => e);
+    expect((err as AppError).cause).toBe(providerError);
+    const logged = JSON.stringify(
+      spy.mock.calls.flat().map((a) => (a instanceof Error ? { ...a, m: a.message } : a)),
+    );
+    expect(spy).toHaveBeenCalled();
+    expect(logged).not.toContain(MARKER);
+    expect(logged).toContain("500");
+    spy.mockRestore();
+  });
 });

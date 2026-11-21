@@ -1,6 +1,6 @@
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { streamText } from "ai";
-import { resolveDeps, safeRecord, type AiDeps } from "./deps";
+import { describeError, resolveDeps, safeRecord, type AiDeps } from "./deps";
 import type { MockKey } from "./mock";
 import type { ModelTier } from "./models";
 import { getModel } from "./provider";
@@ -37,7 +37,7 @@ export async function streamAiText(opts: StreamAiTextOptions, deps: AiDeps = {})
       });
     },
     onError: async ({ error }) => {
-      console.error(`[ai] stream ${opts.purpose} (${opts.model}) failed`, error);
+      console.error(`[ai] stream ${opts.purpose} (${opts.model}) failed: ${describeError(error)}`);
       await safeRecord(record, {
         ...base,
         inputTokens: 0,

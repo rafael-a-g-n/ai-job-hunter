@@ -9,7 +9,7 @@ import type { ZodType } from "zod";
 import { AppError } from "@/lib/errors";
 import type { MockKey } from "./mock";
 import type { ModelTier } from "./models";
-import { resolveDeps, safeRecord, type AiDeps } from "./deps";
+import { describeError, resolveDeps, safeRecord, type AiDeps } from "./deps";
 import { getModel } from "./provider";
 
 export type GenerateStructuredOptions<T> = {
@@ -111,7 +111,7 @@ export async function generateStructured<T>(
     });
     return result.output as T;
   }
-  console.error(`[ai] ${opts.purpose} (${opts.model}) failed`, lastError);
+  console.error(`[ai] ${opts.purpose} (${opts.model}) failed: ${describeError(lastError)}`);
   throw new AppError("AI_FAILED", "The AI service failed. Please try again.", {
     cause: lastError,
   });

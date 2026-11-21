@@ -26,6 +26,19 @@ export async function safeRecord(
   try {
     await record(call);
   } catch (err) {
-    console.error(`[ai] failed to record AiCall (${call.purpose}, ${call.model})`, err);
+    console.error(
+      `[ai] failed to record AiCall (${call.purpose}, ${call.model})`,
+      describeError(err),
+    );
   }
+}
+
+/**
+ * Log-safe summary of an error. Provider errors (APICallError) carry the full request body,
+ * i.e. the prompt, so never log the error object itself; keep it only as an AppError `cause`.
+ */
+export function describeError(err: unknown): string {
+  if (!(err instanceof Error)) return "non-Error thrown";
+  const status = (err as { statusCode?: unknown }).statusCode;
+  return `${err.name}: ${err.message}${typeof status === "number" ? ` (status ${status})` : ""}`;
 }
