@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { postedAgo, sourceLabel } from "@/components/jobs/posted-ago";
 import { DeleteJobButton } from "@/components/jobs/delete-job-button";
 import { SaveButton } from "@/components/jobs/save-button";
+import { WriteLetterDialog } from "@/components/letters/write-letter-dialog";
 import { MatchDetails } from "@/components/matching/match-details";
 import { ScoreBadge } from "@/components/matching/score-badge";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +77,9 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
           </CardContent>
         </Card>
       )}
-      {/* SLOT (Task 13): "Write cover letter" button goes here. */}
+      <div>
+        <WriteLetterDialog jobId={job.id} />
+      </div>
 
       <Card>
         <CardHeader>

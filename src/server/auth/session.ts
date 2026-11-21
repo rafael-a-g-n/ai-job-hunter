@@ -10,7 +10,12 @@ export interface SessionUser {
 
 /** The signed-in user, or null. Reads request headers, so call it inside Suspense. */
 export async function getOptionalUser(): Promise<SessionUser | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  return getUserFromHeaders(await headers());
+}
+
+/** The signed-in user for the given request headers (route handlers), or null. */
+export async function getUserFromHeaders(requestHeaders: Headers): Promise<SessionUser | null> {
+  const session = await auth.api.getSession({ headers: requestHeaders });
   if (!session) return null;
   const { id, email, isDemo } = session.user;
   return { id, email, isDemo: Boolean(isDemo) };

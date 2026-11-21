@@ -3,11 +3,20 @@ import { simulateReadableStream } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 
 /** Add a key here (and its fixture below) when a later task needs a mocked AI call. */
-export type MockKey = "test.echo" | "cv.analysis" | "jobs.normalize" | "matching.rerank";
+export type MockKey =
+  "test.echo" | "cv.analysis" | "jobs.normalize" | "matching.rerank" | "letters.generate";
 
 /** Deterministic outputs used when AI_PROVIDER=mock. Strings stream as-is, objects as JSON. */
 export const MOCK_FIXTURES: Record<MockKey, unknown> = {
   "test.echo": { message: "hello from the mock" },
+  "letters.generate": [
+    "Dear Hiring Manager,",
+    "I am writing to apply for the role at your company. I am a Frontend Developer based in Lisbon with four years of experience building web applications with React and TypeScript, and your posting matches the work I enjoy most.",
+    "At Acme Digital, I built a React and TypeScript design system now used by 5 product teams, and I cut page load time by 35% through code splitting. Earlier, at Studio Tejo, I delivered responsive marketing sites for 12 clients, which taught me to ship carefully and communicate clearly with people outside engineering.",
+    "I hold a BSc in Computer Science from the University of Lisbon, and I work comfortably in Portuguese and English. I care about clean interfaces, good tooling with Git, and steady teamwork, and I would bring that approach to your team.",
+    "Thank you for your time and consideration. I would be glad to discuss how my experience could help your team.",
+    "Kind regards,\nAna Silva",
+  ].join("\n\n"),
   "jobs.normalize": {
     title: "Frontend Engineer",
     company: "Lisbon Labs",
@@ -151,11 +160,15 @@ export function mockModel(mockKey: MockKey): LanguageModelV4 {
     }),
     doStream: async (options) => {
       const text = render(promptToText(options.prompt));
+      // Plain-text fixtures stream in small pieces so the UI can show live output.
+      const plain = typeof fixture === "string";
+      const pieces = plain ? (text.match(/[\s\S]{1,40}/g) ?? []) : [text];
       return {
         stream: simulateReadableStream({
+          chunkDelayInMs: plain ? 15 : 0,
           chunks: [
             { type: "text-start", id: "t" },
-            { type: "text-delta", id: "t", delta: text },
+            ...pieces.map((delta) => ({ type: "text-delta" as const, id: "t", delta })),
             { type: "text-end", id: "t" },
             { type: "finish", finishReason, usage },
           ],
