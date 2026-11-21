@@ -55,7 +55,7 @@ async function fetchWithDeadline(
   }
 }
 
-function embeddingText(j: {
+export function embeddingText(j: {
   title: string;
   company: string;
   location: string | null;

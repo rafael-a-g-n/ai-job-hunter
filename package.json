@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:int": "vitest run --config vitest.int.config.ts",
     "test:e2e": "playwright test",
+    "db:seed": "tsx prisma/seed.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
