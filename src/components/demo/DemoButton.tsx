@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import type { VariantProps } from "class-variance-authority";
+import { Button, type buttonVariants } from "@/components/ui/button";
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
@@ -59,7 +60,11 @@ async function getToken(container: HTMLElement): Promise<string> {
   });
 }
 
-export function DemoButton({ className }: { className?: string }) {
+export function DemoButton({
+  className,
+  variant = "secondary",
+  size,
+}: { className?: string } & VariantProps<typeof buttonVariants>) {
   const router = useRouter();
   const container = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState(false);
@@ -96,7 +101,7 @@ export function DemoButton({ className }: { className?: string }) {
 
   return (
     <div className={className}>
-      <Button type="button" variant="secondary" onClick={start} disabled={pending}>
+      <Button type="button" variant={variant} size={size} onClick={start} disabled={pending}>
         {pending ? "Starting the demo…" : "Try the demo — no sign-up"}
       </Button>
       <div ref={container} />

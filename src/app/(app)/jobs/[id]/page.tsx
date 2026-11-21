@@ -16,6 +16,7 @@ import { requireUser } from "@/server/auth/session";
 import { isJobSaved } from "@/server/jobs/saved";
 import { getJob } from "@/server/jobs/search";
 import { getMatchForJob } from "@/server/matching/match";
+import { PageSkeleton } from "@/components/app/page-skeleton";
 
 async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, user] = await Promise.all([params, requireUser()]);
@@ -98,7 +99,7 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
 export default function JobDetailPage({ params }: PageProps<"/jobs/[id]">) {
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <JobDetail params={params} />
       </Suspense>
     </main>

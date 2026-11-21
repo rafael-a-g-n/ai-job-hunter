@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +48,10 @@ export function AppNav({ email }: { email: string | null }) {
   return (
     <header className="border-b">
       <div className="mx-auto flex h-12 w-full max-w-5xl items-center gap-2 px-4">
-        <Link href="/dashboard" className="mr-2 font-semibold">
+        <Link
+          href="/dashboard"
+          className="mr-2 font-heading text-base font-semibold whitespace-nowrap"
+        >
           AI Job Hunter
         </Link>
         <nav aria-label="Main" className="hidden flex-1 items-center gap-1 md:flex">
@@ -61,9 +65,10 @@ export function AppNav({ email }: { email: string | null }) {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-1 md:ml-0">
+          <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-              <span className="max-w-40 truncate">{email ?? "Account"}</span>
+              <span className="max-w-24 truncate sm:max-w-40">{email ?? "Account"}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem render={<Link href="/settings" />}>Settings</DropdownMenuItem>
@@ -117,7 +122,7 @@ function NavLink({
       aria-current={active ? "page" : undefined}
       className={cn(
         "rounded-lg px-3 py-1.5 text-sm hover:bg-muted",
-        active ? "bg-muted font-medium" : "text-muted-foreground",
+        active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground",
       )}
     >
       {label}

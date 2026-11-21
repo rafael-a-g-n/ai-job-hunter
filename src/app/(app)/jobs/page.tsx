@@ -3,9 +3,11 @@ import { Suspense } from "react";
 import { JobCard } from "@/components/jobs/job-card";
 import { JOB_SOURCES, JobFilters } from "@/components/jobs/job-filters";
 import { Pagination } from "@/components/jobs/pagination";
+import { EmptyState } from "@/components/app/empty-state";
 import { requireUser } from "@/server/auth/session";
 import { savedJobIds } from "@/server/jobs/saved";
 import { searchJobs } from "@/server/jobs/search";
+import { PageSkeleton } from "@/components/app/page-skeleton";
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -48,7 +50,7 @@ async function Results({ searchParams }: { searchParams: Promise<Params> }) {
         {result.total} {result.total === 1 ? "job" : "jobs"} found
       </p>
       {result.items.length === 0 ? (
-        <p className="text-sm">No jobs match these filters.</p>
+        <EmptyState>No jobs match these filters.</EmptyState>
       ) : (
         <ul className="grid gap-3">
           {result.items.map((job) => (
@@ -82,7 +84,7 @@ export default function JobsPage({ searchParams }: PageProps<"/jobs">) {
           </Link>
         </div>
       </div>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading jobs...</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <Results searchParams={searchParams} />
       </Suspense>
     </main>

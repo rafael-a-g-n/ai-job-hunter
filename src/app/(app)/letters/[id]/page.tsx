@@ -5,6 +5,7 @@ import { LetterEditor } from "@/components/letters/letter-editor";
 import { NotFoundError } from "@/lib/errors";
 import { requireUser } from "@/server/auth/session";
 import { getLetter } from "@/server/letters/crud";
+import { PageSkeleton } from "@/components/app/page-skeleton";
 
 async function LetterView({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, user] = await Promise.all([params, requireUser()]);
@@ -47,7 +48,7 @@ async function LetterView({ params }: { params: Promise<{ id: string }> }) {
 export default function LetterPage({ params }: PageProps<"/letters/[id]">) {
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <LetterView params={params} />
       </Suspense>
     </main>

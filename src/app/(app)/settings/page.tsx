@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getPreferredLanguage } from "@/server/account/preferences";
 import { requireUser } from "@/server/auth/session";
 import { getUsageSummary } from "@/server/limits/usage";
+import { PageSkeleton } from "@/components/app/page-skeleton";
 
 async function SettingsContent() {
   const user = await requireUser();
@@ -50,7 +51,7 @@ export default function SettingsPage() {
   return (
     <main className="mx-auto grid w-full max-w-3xl gap-6 p-6">
       <h1 className="text-xl font-semibold">Settings</h1>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <SettingsContent />
       </Suspense>
     </main>

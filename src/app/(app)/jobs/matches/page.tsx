@@ -4,8 +4,10 @@ import { MatchCard } from "@/components/matching/match-card";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AppError } from "@/lib/errors";
+import { EmptyState } from "@/components/app/empty-state";
 import { requireUser } from "@/server/auth/session";
 import { findMatches, type MatchView } from "@/server/matching/match";
+import { PageSkeleton } from "@/components/app/page-skeleton";
 
 function NoCv() {
   return (
@@ -30,7 +32,7 @@ async function Matches() {
     throw e;
   }
   if (matches.length === 0) {
-    return <p className="text-sm">No jobs to match yet. Check back after the next job update.</p>;
+    return <EmptyState>No jobs to match yet. Check back after the next job update.</EmptyState>;
   }
   const now = new Date();
   const reranked = matches.some((m) => m.score !== null);
@@ -61,7 +63,7 @@ export default function MatchesPage() {
           All jobs
         </Link>
       </div>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Finding your matches...</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <Matches />
       </Suspense>
     </main>

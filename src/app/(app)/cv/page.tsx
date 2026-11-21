@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getPreferredLanguage } from "@/server/account/preferences";
 import { requireUser } from "@/server/auth/session";
 import { listCvs } from "@/server/cv/queries";
+import { PageSkeleton } from "@/components/app/page-skeleton";
 
 export const maxDuration = 120;
 
@@ -49,10 +50,10 @@ export default function CvPage() {
   return (
     <main className="mx-auto grid w-full max-w-3xl gap-6 p-6">
       <h1 className="text-xl font-semibold">Your CV</h1>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <CvUpload />
       </Suspense>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading your CVs…</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <CvList />
       </Suspense>
     </main>

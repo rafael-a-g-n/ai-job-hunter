@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/server/auth/session";
 import { getDashboard } from "@/server/dashboard";
+import { PageSkeleton } from "@/components/app/page-skeleton";
 
 async function DashboardContent() {
   const user = await requireUser();
@@ -128,7 +129,7 @@ export default function DashboardPage() {
   return (
     <main className="mx-auto grid w-full max-w-5xl gap-6 p-6">
       <h1 className="text-xl font-semibold">Dashboard</h1>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <DashboardContent />
       </Suspense>
     </main>

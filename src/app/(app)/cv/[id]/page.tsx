@@ -9,6 +9,7 @@ import { getPreferredLanguage } from "@/server/account/preferences";
 import { requireUser } from "@/server/auth/session";
 import { getCv } from "@/server/cv/queries";
 import { CvAnalysis, CvProfile } from "@/server/cv/schemas";
+import { PageSkeleton } from "@/components/app/page-skeleton";
 
 async function CvDetail({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, user] = await Promise.all([params, requireUser()]);
@@ -59,7 +60,7 @@ async function CvDetail({ params }: { params: Promise<{ id: string }> }) {
 export default function CvDetailPage({ params }: PageProps<"/cv/[id]">) {
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+      <Suspense fallback={<PageSkeleton />}>
         <CvDetail params={params} />
       </Suspense>
     </main>
