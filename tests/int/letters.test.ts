@@ -9,13 +9,20 @@ vi.mock("@/server/auth/session", () => ({
   getUserFromHeaders: async () => session.user,
 }));
 
-const streamControl = vi.hoisted(() => ({ mode: "real" as "real" | "error" | "empty" }));
+const streamControl = vi.hoisted(() => ({
+  mode: "real" as "real" | "error" | "empty" | "silent",
+}));
 vi.mock("@/server/ai/stream", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/ai/stream")>();
   return {
     ...actual,
     streamAiText: async (...args: Parameters<typeof actual.streamAiText>) => {
       if (streamControl.mode === "real") return actual.streamAiText(...args);
+      if (streamControl.mode === "silent") {
+        // A model that has not produced any text yet.
+        const fullStream = new ReadableStream({ pull: () => new Promise<void>(() => {}) });
+        return { fullStream } as unknown as Awaited<ReturnType<typeof actual.streamAiText>>;
+      }
       const fullStream = new ReadableStream({
         start(c) {
           if (streamControl.mode === "error") {
@@ -160,7 +167,7 @@ describe("POST /api/letters/stream", () => {
     expect(await usageCount()).toBe(0);
   });
 
-  it("saves no letter, refunds the usage and records the AI call when the client aborts", async () => {
+  it("keeps the usage spent, saves no letter and records an estimated cost when the client aborts mid-stream", async () => {
     await makeCv(A);
     const job = await makeJob();
     const res = await POST(request(job.id));
@@ -171,10 +178,29 @@ describe("POST /api/letters/stream", () => {
     await new Promise((r) => setTimeout(r, 300));
 
     expect(await db.coverLetter.count()).toBe(0);
-    expect(await usageCount()).toBe(0);
+    expect(await usageCount()).toBe(1);
     const calls = await db.aiCall.findMany({ where: { purpose: "letters.generate" } });
     expect(calls).toHaveLength(1);
     expect(calls[0].ok).toBe(false);
+    expect(calls[0].inputTokens).toBeGreaterThan(0);
+    expect(calls[0].outputTokens).toBeGreaterThan(0);
+    expect(Number(calls[0].costUsd)).toBeGreaterThan(0);
+  });
+
+  it("refunds the usage when the client aborts before the first chunk", async () => {
+    await makeCv(A);
+    const job = await makeJob();
+    streamControl.mode = "silent";
+    try {
+      const res = await POST(request(job.id));
+      expect(await usageCount()).toBe(1);
+      await res.body!.cancel();
+      await new Promise((r) => setTimeout(r, 50));
+    } finally {
+      streamControl.mode = "real";
+    }
+    expect(await db.coverLetter.count()).toBe(0);
+    expect(await usageCount()).toBe(0);
   });
 
   it("returns 401 without a session", async () => {

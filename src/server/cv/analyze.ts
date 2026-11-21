@@ -9,6 +9,7 @@ import { consumeUsage, refundUsage } from "@/server/limits/usage";
 import { cvAnalysisPrompt, cvAnalysisSystem, type AnalysisLanguage } from "./prompts";
 import { getCv } from "./queries";
 import { CvAnalysisResult, CvProfile, profileToText } from "./schemas";
+import { MAX_OUTPUT_TOKENS } from "@/server/ai/models";
 
 const GENERIC_FAILURE = "The analysis failed. Please try again.";
 const STALE_CLAIM_MS = 5 * 60 * 1000;
@@ -70,6 +71,7 @@ export async function analyzeCv(
         system: cvAnalysisSystem(language),
         prompt: cvAnalysisPrompt(cv.rawText ?? ""),
         mockKey: "cv.analysis",
+        maxOutputTokens: MAX_OUTPUT_TOKENS.cvAnalysis,
       },
       deps,
     );

@@ -65,6 +65,7 @@ async function main() {
   const { CvAnalysisResult, profileToText } = await import("../src/server/cv/schemas");
   const { generateStructured } = await import("../src/server/ai/structured");
   const { streamAiText } = await import("../src/server/ai/stream");
+  const { MAX_OUTPUT_TOKENS } = await import("../src/server/ai/models");
   const { getEmbedder } = await import("../src/server/embeddings/embedder");
   const { buildLetterPrompt } = await import("../src/server/letters/prompts");
   const { rerankPrompt, rerankSystem } = await import("../src/server/matching/prompts");
@@ -82,6 +83,7 @@ async function main() {
       system: cvAnalysisSystem("en"),
       prompt: cvAnalysisPrompt(rawText),
       mockKey: "cv.analysis",
+      maxOutputTokens: MAX_OUTPUT_TOKENS.cvAnalysis,
     },
     noDb,
   );
@@ -102,6 +104,7 @@ async function main() {
         top.map((j) => ({ ...j, id: j.dedupeHash })),
       ),
       mockKey: "matching.rerank",
+      maxOutputTokens: MAX_OUTPUT_TOKENS.rerank,
     },
     noDb,
   );
@@ -126,6 +129,7 @@ async function main() {
       system,
       prompt,
       mockKey: "letters.generate",
+      maxOutputTokens: MAX_OUTPUT_TOKENS.letter,
     },
     noDb,
   );

@@ -9,13 +9,16 @@ import { getJob } from "@/server/jobs/search";
 import { consumeUsage, refundUsage } from "@/server/limits/usage";
 import { MAX_LETTER_CHARS } from "./crud";
 import { buildLetterPrompt, type LetterOptions } from "./prompts";
+import { MAX_OUTPUT_TOKENS } from "@/server/ai/models";
 
 export const LETTER_ID_HEADER = "X-Letter-Id";
 
 /**
  * Streams a cover letter as plain text. The letter id is chosen up front and sent in the
  * `X-Letter-Id` header; the row is saved before the stream closes, so when the client sees the
- * stream end the letter exists. A failed or aborted stream saves nothing and refunds the usage.
+ * stream end the letter exists. A failed stream saves nothing and refunds the usage. A cancelled
+ * stream saves nothing either, but refunds only if no text had been sent yet: once the model has
+ * produced output the unit is spent (otherwise cancelling would give unlimited free generations).
  */
 export async function streamLetter(
   user: { id: string; isDemo: boolean },
@@ -49,6 +52,7 @@ export async function streamLetter(
       system,
       prompt,
       mockKey: "letters.generate",
+      maxOutputTokens: MAX_OUTPUT_TOKENS.letter,
       abortSignal: abort.signal,
     });
   } catch (e) {
@@ -61,6 +65,7 @@ export async function streamLetter(
   const reader = result.fullStream.getReader();
   let text = "";
   let cancelled = false;
+  let sentText = false;
 
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -71,6 +76,7 @@ export async function streamLetter(
           if (value.type === "error") throw value.error;
           if (value.type === "text-delta") {
             text += value.text;
+            sentText = true;
             controller.enqueue(encoder.encode(value.text));
             return;
           }
@@ -91,7 +97,7 @@ export async function streamLetter(
           },
         });
         if (cancelled) {
-          // Aborted while saving: no letter on abort, and the usage is already refunded.
+          // Aborted while saving: no letter on abort.
           await db.coverLetter.deleteMany({ where: { id } });
           return;
         }
@@ -106,7 +112,7 @@ export async function streamLetter(
     async cancel() {
       cancelled = true;
       abort.abort();
-      await refund();
+      if (!sentText) await refund();
       await reader.cancel().catch(() => {});
     },
   });

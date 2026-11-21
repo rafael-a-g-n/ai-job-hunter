@@ -33,6 +33,7 @@ function setup(...texts: string[]) {
     system: "sys",
     prompt: "p",
     mockKey: "test.echo" as const,
+    maxOutputTokens: 1234,
   };
   return { model, calls, deps, opts };
 }
@@ -78,6 +79,7 @@ describe("generateStructured", () => {
         system: "s",
         prompt: "p",
         mockKey: "test.echo" as const,
+        maxOutputTokens: 777,
         timeoutMs: 20,
       },
       { model, record: async (c) => void calls.push(c), assertBudget: async () => {} },
@@ -85,6 +87,31 @@ describe("generateStructured", () => {
     expect(err).toMatchObject({ code: "AI_FAILED" });
     expect(model.doGenerateCalls).toHaveLength(2);
     expect(calls.map((c) => c.ok)).toEqual([false, false]);
+    // A timed-out attempt reports no usage: it is estimated, assuming the full output cap.
+    expect(calls[0]).toMatchObject({ inputTokens: 1, outputTokens: 777 });
+  });
+
+  it("passes maxOutputTokens to the model", async () => {
+    const { model, deps, opts } = setup('{"name":"Ada","age":36}');
+    await generateStructured(opts, deps);
+    expect(model.doGenerateCalls[0].maxOutputTokens).toBe(1234);
+  });
+
+  it("estimates the cost of a failed attempt whose usage was not reported", async () => {
+    const providerError = new Error("500 upstream");
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw providerError;
+      },
+    });
+    const { calls, deps, opts } = setup();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await generateStructured(
+      { ...opts, system: "s".repeat(400), prompt: "p".repeat(400) },
+      { ...deps, model },
+    ).catch(() => {});
+    spy.mockRestore();
+    expect(calls).toEqual([expect.objectContaining({ ok: false, inputTokens: 200 })]);
   });
 
   it("does not call the model when the budget is exhausted", async () => {

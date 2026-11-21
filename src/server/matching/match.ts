@@ -9,6 +9,7 @@ import { jobListSelect, visibleJobWhere, type JobListItem } from "@/server/jobs/
 import { consumeUsage, refundUsage } from "@/server/limits/usage";
 import { DESCRIPTION_CHARS, rerankPrompt, rerankSystem } from "./prompts";
 import { RerankResult } from "./schemas";
+import { MAX_OUTPUT_TOKENS } from "@/server/ai/models";
 
 export type MatchView = {
   job: JobListItem;
@@ -143,6 +144,7 @@ export async function findMatches(
             })),
           ),
           mockKey: "matching.rerank",
+          maxOutputTokens: MAX_OUTPUT_TOKENS.rerank,
         },
         deps,
       );

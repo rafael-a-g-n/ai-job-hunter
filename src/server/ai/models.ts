@@ -13,3 +13,11 @@ export const PRICES: Record<ModelId, { input: number; output: number }> = {
   "claude-haiku-5-5": { input: 0.1, output: 0.5 },
   "claude-sonnet-5-5": { input: 2, output: 10 },
 };
+
+/** Output cap per AI call, so one request can never run up an unbounded bill. */
+export const MAX_OUTPUT_TOKENS = {
+  cvAnalysis: 8000,
+  jobNormalize: 3000,
+  rerank: 3000,
+  letter: 1500,
+} as const;

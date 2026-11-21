@@ -9,6 +9,7 @@ import type { ZodType } from "zod";
 import { AppError } from "@/lib/errors";
 import type { MockKey } from "./mock";
 import type { ModelTier } from "./models";
+import { estimateTokens } from "./estimate";
 import { describeError, resolveDeps, safeRecord, type AiDeps } from "./deps";
 import { getModel } from "./provider";
 
@@ -20,6 +21,7 @@ export type GenerateStructuredOptions<T> = {
   system: string;
   prompt: string;
   mockKey: MockKey;
+  maxOutputTokens: number;
   /** Per attempt. Default 60000. */
   timeoutMs?: number;
 };
@@ -57,9 +59,22 @@ async function withTimeout<R>(ms: number, run: (signal: AbortSignal) => Promise<
   }
 }
 
-function failedUsage(err: unknown): { inputTokens: number; outputTokens: number } {
+/**
+ * Usage of a failed attempt: the provider's numbers when it reported them, otherwise an estimate,
+ * so failures still count against the global budget. A timed-out request is assumed to have
+ * produced the maximum output, since it ran until it was cut off.
+ */
+function failedUsage(
+  err: unknown,
+  opts: { system: string; prompt: string; maxOutputTokens: number },
+): { inputTokens: number; outputTokens: number } {
   const usage = NoObjectGeneratedError.isInstance(err) ? err.usage : undefined;
-  return { inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0 };
+  const text = NoObjectGeneratedError.isInstance(err) ? (err.text ?? "") : "";
+  const inputTokens = usage?.inputTokens || estimateTokens(opts.system + opts.prompt);
+  const outputTokens =
+    usage?.outputTokens ||
+    (err instanceof TimeoutError ? opts.maxOutputTokens : estimateTokens(text));
+  return { inputTokens, outputTokens };
 }
 
 /**
@@ -89,13 +104,14 @@ export async function generateStructured<T>(
           prompt: opts.prompt,
           abortSignal,
           maxRetries: 0,
+          maxOutputTokens: opts.maxOutputTokens,
         }),
       );
     } catch (err) {
       lastError = err;
       await safeRecord(record, {
         ...base,
-        ...failedUsage(err),
+        ...failedUsage(err, opts),
         durationMs: Date.now() - started,
         ok: false,
       });

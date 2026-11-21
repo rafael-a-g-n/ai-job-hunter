@@ -8,6 +8,7 @@ import { toPgVector } from "@/server/embeddings/vector";
 import { consumeUsage, refundUsage } from "@/server/limits/usage";
 import { ManualJobInput, NormalizedManualJob } from "./manual-schema";
 import { computeDedupeHash } from "./sources";
+import { MAX_OUTPUT_TOKENS } from "@/server/ai/models";
 
 const TTL_MS = 365 * 24 * 3600 * 1000;
 
@@ -43,6 +44,7 @@ export async function createManualJob(
         system: SYSTEM,
         prompt: `Job posting:\n<posting>\n${text}\n</posting>`,
         mockKey: "jobs.normalize",
+        maxOutputTokens: MAX_OUTPUT_TOKENS.jobNormalize,
       },
       deps,
     );

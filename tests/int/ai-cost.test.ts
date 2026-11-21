@@ -26,6 +26,7 @@ const opts = {
   system: "s",
   prompt: "p",
   mockKey: "test.echo" as const,
+  maxOutputTokens: 100,
 };
 
 beforeEach(async () => {
@@ -59,6 +60,8 @@ describe("AiCall logging", () => {
     const rows = await db.aiCall.findMany();
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => !r.ok)).toBe(true);
+    // The model answered, so its reported usage is billed, not zero.
+    expect(rows.every((r) => Number(r.costUsd) > 0)).toBe(true);
   });
 
   it("logs streamed usage in onFinish", async () => {
@@ -69,6 +72,7 @@ describe("AiCall logging", () => {
       system: "s",
       prompt: "p",
       mockKey: "test.echo" as const,
+      maxOutputTokens: 100,
     });
     expect(await result.text).toContain("hello from the mock");
     await new Promise((r) => setTimeout(r, 50));
