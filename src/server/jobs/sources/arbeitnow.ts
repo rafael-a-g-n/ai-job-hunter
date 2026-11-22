@@ -2,7 +2,7 @@ import { z } from "zod";
 import { JobSource } from "@/generated/prisma/client";
 import { SOURCES_CONFIG } from "./config";
 import type { JobSourceAdapter, NormalizedJob } from "./types";
-import { getJson, parseItems, parseDate, stripHtml } from "./util";
+import { getJson, htmlToText, parseItems, parseDate, stripHtml } from "./util";
 
 const jobSchema = z.object({
   slug: z.string(),
@@ -34,7 +34,7 @@ export const arbeitnowAdapter: JobSourceAdapter = {
           company: j.company_name.trim(),
           location: j.location.trim() || null,
           remote: j.remote,
-          description: stripHtml(j.description),
+          description: htmlToText(j.description),
           url: j.url,
           salaryMin: null,
           salaryMax: null,

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { JobSource } from "@/generated/prisma/client";
 import { SOURCES_CONFIG } from "./config";
 import type { JobSourceAdapter } from "./types";
-import { getJson, parseItems, parseDate, stripHtml } from "./util";
+import { getJson, htmlToText, parseItems, parseDate, stripHtml } from "./util";
 
 const jobSchema = z.object({
   id: z.union([z.number(), z.string()]),
@@ -30,7 +30,7 @@ export const remotiveAdapter: JobSourceAdapter = {
       company: j.company_name.trim(),
       location: j.candidate_required_location?.trim() || null,
       remote: true,
-      description: stripHtml(j.description),
+      description: htmlToText(j.description),
       url: j.url,
       // Remotive salary is free text ("$14/hour"); not reliably parseable.
       salaryMin: null,

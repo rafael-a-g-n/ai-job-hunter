@@ -5,7 +5,7 @@ import { createAdzunaAdapter } from "@/server/jobs/sources/adzuna";
 import { arbeitnowAdapter } from "@/server/jobs/sources/arbeitnow";
 import { SOURCES_CONFIG } from "@/server/jobs/sources/config";
 import { remotiveAdapter } from "@/server/jobs/sources/remotive";
-import { computeDedupeHash, getJson, stripHtml } from "@/server/jobs/sources/util";
+import { computeDedupeHash, getJson, htmlToText, stripHtml } from "@/server/jobs/sources/util";
 
 function fixture(name: string): unknown {
   return JSON.parse(
@@ -32,6 +32,39 @@ describe("stripHtml", () => {
     expect(
       stripHtml("&lt;h3&gt;&lt;strong&gt;About&lt;/strong&gt;&lt;/h3&gt; &amp;amp; more"),
     ).toBe("About & more");
+  });
+});
+
+describe("htmlToText", () => {
+  it("keeps paragraphs, line breaks and list items", () => {
+    expect(
+      htmlToText(
+        "<h3>About</h3><p>Hello&nbsp;<strong>world</strong> &amp; co.<br>Second   line</p>" +
+          "<p>What you get:</p><ul><li>Remote</li><li>Flexible  hours</li></ul><p>Apply now</p>",
+      ),
+    ).toBe(
+      "About\n\nHello world & co.\nSecond line\n\nWhat you get:\n\n• Remote\n• Flexible hours\n\nApply now",
+    );
+  });
+
+  it("keeps list items whole when they wrap their text in paragraphs", () => {
+    expect(
+      htmlToText("<p>Skills</p><ul><li><p>Ruby</p></li><li><p>Rails 8</p></li></ul><p>End</p>"),
+    ).toBe("Skills\n\n• Ruby\n• Rails 8\n\nEnd");
+  });
+
+  it("handles double-escaped markup", () => {
+    expect(htmlToText("&lt;p&gt;One&lt;/p&gt;&lt;p&gt;Two &amp;amp; three&lt;/p&gt;")).toBe(
+      "One\n\nTwo & three",
+    );
+  });
+
+  it("collapses runs of blank lines and trims every line", () => {
+    expect(htmlToText("  <div>\n\n\n  a  </div>\r\n\r\n\r\n<div>\tb</div>  ")).toBe("a\n\nb");
+  });
+
+  it("leaves plain text unchanged apart from whitespace", () => {
+    expect(htmlToText("Plain  text\nwith a break")).toBe("Plain text\nwith a break");
   });
 });
 

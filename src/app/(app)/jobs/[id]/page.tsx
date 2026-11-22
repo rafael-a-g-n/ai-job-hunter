@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { postedAgo, sourceLabel } from "@/components/jobs/posted-ago";
 import { DeleteJobButton } from "@/components/jobs/delete-job-button";
+import { JobDescription } from "@/components/jobs/job-description";
 import { SaveButton } from "@/components/jobs/save-button";
 import { WriteLetterDialog } from "@/components/letters/write-letter-dialog";
 import { MatchDetails } from "@/components/matching/match-details";
@@ -89,7 +90,7 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
           <CardTitle>Description</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm whitespace-pre-wrap">{job.description}</p>
+          <JobDescription text={job.description} />
         </CardContent>
       </Card>
     </div>

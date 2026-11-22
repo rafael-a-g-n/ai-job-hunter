@@ -258,6 +258,18 @@ describe("runIngest", () => {
     expect(after.fetchedAt.getTime()).toBeGreaterThan(before.getTime());
   });
 
+  it("updates the description of a job that is seen again", async () => {
+    await runIngest({
+      adapters: [staticAdapter("ARBEITNOW", [job(1, { description: "Old flat text" })])],
+      now: new Date(Date.now() - 2 * DAY),
+    });
+    await runIngest({
+      adapters: [staticAdapter("ARBEITNOW", [job(1, { description: "About\n\n• Remote" })])],
+      force: true,
+    });
+    expect((await db.job.findFirstOrThrow()).description).toBe("About\n\n• Remote");
+  });
+
   it("dedupes identical jobs within one fetch", async () => {
     const report = await runIngest({ adapters: [staticAdapter("ARBEITNOW", [job(1), job(1)])] });
     expect(report.sources[0].inserted).toBe(1);

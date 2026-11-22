@@ -73,19 +73,24 @@ export function embeddingText(j: {
 
 // One request's worth (see MAX_BATCH_INPUTS), so a chunk is written as soon as it is embedded.
 const EMBED_CHUNK = MAX_BATCH_INPUTS;
-const REFRESH_CHUNK = 1000;
+// Each row carries its description (up to a few KB), so keep a statement to a few hundred rows.
+const REFRESH_CHUNK = 200;
 
-/** Bulk-refreshes fetchedAt/expiresAt of known jobs; rows whose new expiry is already past are left alone. */
+/**
+ * Bulk-refreshes fetchedAt/expiresAt and the description of known jobs, so formatting fixes
+ * reach rows ingested earlier. Rows whose new expiry is already past are left alone. The
+ * embedding is not recomputed: the wording is the same, only the layout of the text changes.
+ */
 async function refreshExisting(
-  rows: { hash: string; expiresAt: Date }[],
+  rows: { hash: string; expiresAt: Date; description: string }[],
   now: Date,
 ): Promise<void> {
   const live = rows.filter((r) => r.expiresAt > now);
   for (let i = 0; i < live.length; i += REFRESH_CHUNK) {
     const values = live
       .slice(i, i + REFRESH_CHUNK)
-      .map((r) => Prisma.sql`(${r.hash}, ${r.expiresAt.toISOString()})`);
-    await db.$executeRaw`UPDATE "Job" AS j SET "fetchedAt" = ${now.toISOString()}::timestamp, "expiresAt" = v.e::timestamp FROM (VALUES ${Prisma.join(values)}) AS v(h, e) WHERE j."dedupeHash" = v.h`;
+      .map((r) => Prisma.sql`(${r.hash}, ${r.expiresAt.toISOString()}, ${r.description})`);
+    await db.$executeRaw`UPDATE "Job" AS j SET "fetchedAt" = ${now.toISOString()}::timestamp, "expiresAt" = v.e::timestamp, "description" = v.d FROM (VALUES ${Prisma.join(values)}) AS v(h, e, d) WHERE j."dedupeHash" = v.h`;
   }
 }
 
@@ -103,10 +108,10 @@ async function upsertJobs(jobs: NormalizedJob[], now: Date): Promise<number> {
   );
 
   await refreshExisting(
-    [...existing].map((hash) => ({
-      hash,
-      expiresAt: expiryFor(byHash.get(hash)?.postedAt ?? null, now),
-    })),
+    [...existing].flatMap((hash) => {
+      const j = byHash.get(hash);
+      return j ? [{ hash, expiresAt: expiryFor(j.postedAt, now), description: j.description }] : [];
+    }),
     now,
   );
 

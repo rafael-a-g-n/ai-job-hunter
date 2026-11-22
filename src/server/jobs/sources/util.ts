@@ -19,6 +19,40 @@ export function stripHtml(html: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+const HAS_TAG = /<[a-z/][^>]*>/i;
+
+function toTextOnce(input: string): string {
+  return decode(
+    input
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<li\b[^>]*>/gi, "\n• ")
+      .replace(/<\/?(p|div|ul|ol|h[1-6]|tr|table|section|blockquote)\b[^>]*>/gi, "\n\n")
+      .replace(/<[^>]*>/g, ""),
+  );
+}
+
+/**
+ * Readable plain text from (possibly entity-escaped) HTML, for job descriptions: paragraphs
+ * become blank-line breaks, <br> a line break and list items "• " lines. Spaces are collapsed
+ * within each line and runs of blank lines reduced to one. Titles use stripHtml instead.
+ */
+export function htmlToText(html: string): string {
+  let text = toTextOnce(html);
+  if (HAS_TAG.test(text)) text = toTextOnce(text);
+  return (
+    text
+      .replace(/\r\n?/g, "\n")
+      .split("\n")
+      .map((line) => line.replace(/[ \t ]+/g, " ").trim())
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      // "<li><p>text</p></li>" leaves the bullet on its own line and a blank line between items.
+      .replace(/(^|\n)•\n+/g, "$1• ")
+      .replace(/(?<=(?:^|\n)• [^\n]*)\n\n(?=• )/g, "\n")
+      .trim()
+  );
+}
+
 export function computeDedupeHash(
   j: Pick<NormalizedJob, "title" | "company" | "location">,
 ): string {

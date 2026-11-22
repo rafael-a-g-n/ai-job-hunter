@@ -4,7 +4,7 @@ import { DEFAULT_ADZUNA_COUNTRIES, type AdzunaCountry } from "@/lib/adzuna-count
 import { env } from "@/lib/env";
 import { SOURCES_CONFIG } from "./config";
 import type { JobSourceAdapter, NormalizedJob } from "./types";
-import { getJson, parseItems, parseDate, stripHtml } from "./util";
+import { getJson, htmlToText, parseItems, parseDate, stripHtml } from "./util";
 
 // Adzuna does not return a currency; it follows the country of the search.
 const CURRENCY: Record<AdzunaCountry, string> = {
@@ -59,7 +59,7 @@ export function adzunaUrl(
 function mapJob(job: z.infer<typeof jobSchema>, country: AdzunaCountry): NormalizedJob {
   const hasSalary = job.salary_min != null || job.salary_max != null;
   const title = stripHtml(job.title);
-  const description = stripHtml(job.description);
+  const description = htmlToText(job.description);
   return {
     source: JobSource.ADZUNA,
     externalId: String(job.id),
