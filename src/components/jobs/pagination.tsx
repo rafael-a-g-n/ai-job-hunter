@@ -24,7 +24,12 @@ export function Pagination({
   return (
     <nav aria-label="Pagination" className="flex items-center justify-between text-sm">
       {page > 1 ? (
-        <Button variant="outline" size="sm" render={<Link href={href(page - 1)} />}>
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link href={href(page - 1)} />}
+        >
           Previous
         </Button>
       ) : (
@@ -34,7 +39,12 @@ export function Pagination({
         Page {page} of {pages}
       </span>
       {page < pages ? (
-        <Button variant="outline" size="sm" render={<Link href={href(page + 1)} />}>
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link href={href(page + 1)} />}
+        >
           Next
         </Button>
       ) : (
