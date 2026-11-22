@@ -21,6 +21,7 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
 | Voyage AI | dash.voyageai.com, API keys. Add a payment method: without one the account is limited to 3 requests per minute, too few for ingest (the free token allowance still applies once a card is on file). | `VOYAGE_API_KEY` |
 | Adzuna | developer.adzuna.com, free app id and key (optional; the source is skipped without them) | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` |
 | Resend | resend.com: add and verify a sending domain (DNS records), then create an API key | `RESEND_API_KEY`, `EMAIL_FROM` |
+| Brevo | app.brevo.com: verify a single sender email (no own domain needed), then create an API key (see "Free tier: Brevo" below). Alternative to Resend. | `BREVO_API_KEY`, `EMAIL_FROM` |
 | Cloudflare Turnstile | Cloudflare dashboard, Turnstile, add a widget for your Vercel domain | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public), `TURNSTILE_SECRET_KEY` |
 
 `EMAIL_FROM` must use the domain you verified in Resend, for example `AI Job Hunter <noreply@yourdomain.com>`.
@@ -49,8 +50,9 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
    | `VOYAGE_API_KEY` | from step 2 (when `EMBEDDINGS_PROVIDER=voyage`) |
    | `STORAGE_PROVIDER` | `vercel-blob` |
    | `BLOB_READ_WRITE_TOKEN` | added by the Blob store |
-   | `MAIL_PROVIDER` | `resend` |
-   | `RESEND_API_KEY` | from step 2 |
+   | `MAIL_PROVIDER` | `resend`, or `brevo` |
+   | `RESEND_API_KEY` | from step 2 (when `MAIL_PROVIDER=resend`) |
+   | `BREVO_API_KEY` | from step 2 (when `MAIL_PROVIDER=brevo`) |
    | `EMAIL_FROM` | verified sender |
    | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | optional |
    | `CRON_SECRET` | `openssl rand -hex 32` (reuse it in GitHub, step 4) |
@@ -60,6 +62,18 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
 
    `NEXT_PUBLIC_*` values are inlined at build time, so redeploy after changing the site key.
 5. Deploy.
+
+### Free tier: Brevo
+
+Setting `MAIL_PROVIDER=brevo` sends verification and reset emails through Brevo's free plan, which needs no own domain.
+
+1. Create an account at brevo.com.
+2. Senders, Domains & Dedicated IPs, Senders, add a sender with the email address you want to send from, and click the confirmation link Brevo emails to it.
+3. SMTP & API, API Keys, generate a key and set it as `BREVO_API_KEY`.
+4. Set `EMAIL_FROM` to exactly that verified sender, for example `AI Job Hunter <you@gmail.com>`. Brevo rejects other senders.
+
+- The free plan has a daily sending limit (300 emails per day at the time of writing; check Brevo's pricing page). Past it, sign-ups cannot receive their verification email.
+- Without your own domain (no SPF/DKIM/DMARC alignment for the sender address) some messages may land in spam, especially with a free-mail sender such as Gmail. Tell testers to check the spam folder.
 
 ### Free tier: Google Gemini
 

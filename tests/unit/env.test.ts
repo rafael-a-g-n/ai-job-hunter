@@ -52,6 +52,8 @@ describe("parseEnv", () => {
       /BLOB_READ_WRITE_TOKEN/,
     );
     expect(() => parseEnv({ ...valid, MAIL_PROVIDER: "resend" })).toThrow(/RESEND_API_KEY/);
+    expect(() => parseEnv({ ...valid, MAIL_PROVIDER: "brevo" })).toThrow(/BREVO_API_KEY/);
+    expect(() => parseEnv({ ...valid, MAIL_PROVIDER: "brevo", BREVO_API_KEY: "k" })).not.toThrow();
   });
 
   it("defaults GLOBAL_DAILY_AI_BUDGET_USD to 5 and TURNSTILE_BYPASS to false", () => {

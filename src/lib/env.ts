@@ -20,8 +20,9 @@ const schema = z
     VOYAGE_API_KEY: optionalStr,
     STORAGE_PROVIDER: z.enum(["vercel-blob", "local"]),
     BLOB_READ_WRITE_TOKEN: optionalStr,
-    MAIL_PROVIDER: z.enum(["resend", "console"]),
+    MAIL_PROVIDER: z.enum(["resend", "brevo", "console"]),
     RESEND_API_KEY: optionalStr,
+    BREVO_API_KEY: optionalStr,
     EMAIL_FROM: z.string().min(1),
     ADZUNA_APP_ID: optionalStr,
     ADZUNA_APP_KEY: optionalStr,
@@ -39,6 +40,7 @@ const schema = z
       [e.EMBEDDINGS_PROVIDER === "gemini", "GOOGLE_GENERATIVE_AI_API_KEY"],
       [e.STORAGE_PROVIDER === "vercel-blob", "BLOB_READ_WRITE_TOKEN"],
       [e.MAIL_PROVIDER === "resend", "RESEND_API_KEY"],
+      [e.MAIL_PROVIDER === "brevo", "BREVO_API_KEY"],
     ];
     for (const [selected, key] of required) {
       if (selected && !e[key]) {
