@@ -14,6 +14,30 @@ const valid = {
 };
 
 describe("parseEnv", () => {
+  describe("ADZUNA_COUNTRIES", () => {
+    it("defaults to Spain when unset or empty", () => {
+      expect(parseEnv(valid).ADZUNA_COUNTRIES).toEqual(["es"]);
+      expect(parseEnv({ ...valid, ADZUNA_COUNTRIES: "" }).ADZUNA_COUNTRIES).toEqual(["es"]);
+    });
+
+    it("parses a comma-separated list, trimmed and lower-cased", () => {
+      expect(parseEnv({ ...valid, ADZUNA_COUNTRIES: " ES, gb " }).ADZUNA_COUNTRIES).toEqual([
+        "es",
+        "gb",
+      ]);
+    });
+
+    it("rejects countries the Adzuna API does not support, such as Portugal", () => {
+      expect(() => parseEnv({ ...valid, ADZUNA_COUNTRIES: "pt" })).toThrow(/ADZUNA_COUNTRIES/);
+    });
+
+    it("rejects more than 4 countries (the free key allows 250 requests a day)", () => {
+      expect(() => parseEnv({ ...valid, ADZUNA_COUNTRIES: "es,gb,fr,de,it" })).toThrow(
+        /ADZUNA_COUNTRIES/,
+      );
+    });
+  });
+
   it("throws when AI_PROVIDER is anthropic without ANTHROPIC_API_KEY", () => {
     expect(() => parseEnv({ ...valid, AI_PROVIDER: "anthropic" })).toThrow(/ANTHROPIC_API_KEY/);
   });

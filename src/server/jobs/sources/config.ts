@@ -1,6 +1,6 @@
 export const SOURCES_CONFIG = {
   adzuna: {
-    countries: ["pt"],
+    // Countries come from ADZUNA_COUNTRIES (src/lib/env.ts); the API has no Portugal.
     queries: ["developer", "engineer", "designer", "data", "marketing", "sales", "customer"],
     resultsPerPage: 50,
     pages: 2,

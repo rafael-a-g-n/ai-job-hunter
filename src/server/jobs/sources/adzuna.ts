@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { JobSource } from "@/generated/prisma/client";
+import { DEFAULT_ADZUNA_COUNTRIES, type AdzunaCountry } from "@/lib/adzuna-countries";
 import { env } from "@/lib/env";
 import { SOURCES_CONFIG } from "./config";
 import type { JobSourceAdapter, NormalizedJob } from "./types";
 import { getJson, parseItems, parseDate, stripHtml } from "./util";
 
 // Adzuna does not return a currency; it follows the country of the search.
-const CURRENCY: Record<string, string> = {
-  pt: "EUR",
+const CURRENCY: Record<AdzunaCountry, string> = {
   es: "EUR",
   fr: "EUR",
   de: "EUR",
@@ -56,7 +56,7 @@ export function adzunaUrl(
   return `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}?${params}`;
 }
 
-function mapJob(job: z.infer<typeof jobSchema>, country: string): NormalizedJob {
+function mapJob(job: z.infer<typeof jobSchema>, country: AdzunaCountry): NormalizedJob {
   const hasSalary = job.salary_min != null || job.salary_max != null;
   const title = stripHtml(job.title);
   const description = stripHtml(job.description);
@@ -76,13 +76,16 @@ function mapJob(job: z.infer<typeof jobSchema>, country: string): NormalizedJob 
   };
 }
 
-export function createAdzunaAdapter(creds: { appId: string; appKey: string }): JobSourceAdapter {
+export function createAdzunaAdapter(
+  creds: { appId: string; appKey: string },
+  countries: readonly AdzunaCountry[] = DEFAULT_ADZUNA_COUNTRIES,
+): JobSourceAdapter {
   return {
     source: JobSource.ADZUNA,
     minIntervalHours: 6,
     async fetchJobs(fetchFn = fetch) {
       const byId = new Map<string, NormalizedJob>();
-      for (const country of SOURCES_CONFIG.adzuna.countries) {
+      for (const country of countries) {
         for (const query of SOURCES_CONFIG.adzuna.queries) {
           for (let page = 1; page <= SOURCES_CONFIG.adzuna.pages; page++) {
             const json = await getJson("Adzuna", adzunaUrl(country, page, query, creds), fetchFn);
@@ -100,5 +103,8 @@ export function createAdzunaAdapter(creds: { appId: string; appKey: string }): J
 
 export function adzunaAdapterFromEnv(): JobSourceAdapter | null {
   if (!env.ADZUNA_APP_ID || !env.ADZUNA_APP_KEY) return null;
-  return createAdzunaAdapter({ appId: env.ADZUNA_APP_ID, appKey: env.ADZUNA_APP_KEY });
+  return createAdzunaAdapter(
+    { appId: env.ADZUNA_APP_ID, appKey: env.ADZUNA_APP_KEY },
+    env.ADZUNA_COUNTRIES,
+  );
 }

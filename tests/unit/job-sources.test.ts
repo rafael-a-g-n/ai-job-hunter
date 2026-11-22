@@ -56,10 +56,20 @@ describe("Adzuna adapter", () => {
     expect(adapter.minIntervalHours).toBe(6);
   });
 
-  it("requests every query and page with the right URL", async () => {
+  it("searches Spain when no countries are given", async () => {
     const fetchFn = stubFetch({ results: [] });
     await adapter.fetchJobs(asFetch(fetchFn));
-    const { countries, queries, pages, resultsPerPage } = SOURCES_CONFIG.adzuna;
+    const paths = fetchFn.mock.calls.map(([u]) => new URL(String(u)).pathname);
+    expect(paths.every((p) => p.startsWith("/v1/api/jobs/es/"))).toBe(true);
+  });
+
+  it("requests every configured country, query and page with the right URL", async () => {
+    const countries = ["es", "gb"] as const;
+    const fetchFn = stubFetch({ results: [] });
+    await createAdzunaAdapter({ appId: "id123", appKey: "key456" }, countries).fetchJobs(
+      asFetch(fetchFn),
+    );
+    const { queries, pages, resultsPerPage } = SOURCES_CONFIG.adzuna;
     expect(fetchFn).toHaveBeenCalledTimes(countries.length * queries.length * pages);
     const urls = fetchFn.mock.calls.map(([u]) => new URL(String(u)));
     for (const country of countries) {

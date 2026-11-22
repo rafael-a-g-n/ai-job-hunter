@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  ADZUNA_SUPPORTED_COUNTRIES,
+  DEFAULT_ADZUNA_COUNTRIES,
+  MAX_ADZUNA_COUNTRIES,
+} from "./adzuna-countries";
 
 /** Treat empty strings (e.g. `KEY=` in .env files) as unset. */
 const optionalStr = z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional());
@@ -7,6 +12,25 @@ const bool = z
   .enum(["true", "false"])
   .or(z.boolean())
   .transform((v) => v === true || v === "true");
+
+/** "es, GB" → ["es", "gb"]; unset or empty → the default. */
+const adzunaCountries = z.preprocess(
+  (v) =>
+    typeof v === "string" && v.trim() !== ""
+      ? v
+          .split(",")
+          .map((c) => c.trim().toLowerCase())
+          .filter(Boolean)
+      : DEFAULT_ADZUNA_COUNTRIES,
+  z
+    .array(
+      z.enum(ADZUNA_SUPPORTED_COUNTRIES, {
+        error: `must be one of ${ADZUNA_SUPPORTED_COUNTRIES.join(", ")}`,
+      }),
+    )
+    .min(1)
+    .max(MAX_ADZUNA_COUNTRIES),
+);
 
 const schema = z
   .object({
@@ -26,6 +50,7 @@ const schema = z
     EMAIL_FROM: z.string().min(1),
     ADZUNA_APP_ID: optionalStr,
     ADZUNA_APP_KEY: optionalStr,
+    ADZUNA_COUNTRIES: adzunaCountries,
     CRON_SECRET: z.string().min(1),
     TURNSTILE_SECRET_KEY: optionalStr,
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: optionalStr,

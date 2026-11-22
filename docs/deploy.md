@@ -55,6 +55,7 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
    | `BREVO_API_KEY` | from step 2 (when `MAIL_PROVIDER=brevo`) |
    | `EMAIL_FROM` | sender verified with the mail provider (Resend: an address on the verified domain; Brevo: the verified single sender) |
    | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | optional |
+   | `ADZUNA_COUNTRIES` | optional, comma-separated, at most 4 (default `es`). The Adzuna API supports at, au, be, br, ca, ch, de, es, fr, gb, in, it, mx, nl, nz, pl, sg, us, za; **not Portugal** (`pt` returns 404 `UNSUPPORTED_COUNTRY`). Each country costs 14 requests per ingest run, so 4 countries use 224 of the free key's 250 requests a day. |
    | `CRON_SECRET` | `openssl rand -hex 32` (reuse it in GitHub, step 4) |
    | `TURNSTILE_SECRET_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | from step 2 |
    | `TURNSTILE_BYPASS` | `false` (**must not be `true` in production**; it skips the bot check) |
