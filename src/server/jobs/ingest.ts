@@ -2,7 +2,7 @@ import { Prisma, type JobSource } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { cleanupExpiredDemoUsers } from "@/server/demo/cleanup";
 import { templateJobHashes } from "@/server/demo/template";
-import { embedBudgetPerRun, getEmbedder } from "@/server/embeddings/embedder";
+import { embedBudgetIsShared, embedBudgetPerRun, getEmbedder } from "@/server/embeddings/embedder";
 import { toPgVector } from "@/server/embeddings/vector";
 import { MAX_BATCH_INPUTS } from "@/server/embeddings/http";
 import { computeDedupeHash, getEnabledAdapters } from "./sources";
@@ -13,13 +13,18 @@ export type IngestSourceReport = {
   skipped?: "interval";
   fetched: number;
   inserted: number;
+  /** The fetch/store failed. Only this counts against the source's interval. */
   error?: string;
+  /** Embedding failed (the jobs are stored and embedded by a later run); kept apart from `error`. */
+  embedError?: string;
 };
 
 export type IngestReport = {
   sources: IngestSourceReport[];
   expired: number;
   demoUsersDeleted: number;
+  /** Embedding the manual jobs without a vector failed. */
+  manualEmbedError?: string;
 };
 
 export const ADAPTER_TIMEOUT_MS = 25_000;
@@ -143,18 +148,45 @@ type EmbedRow = {
 };
 
 /**
- * Embeds live jobs of a source that have no vector yet (new rows, or rows left behind by an
- * earlier failed run), oldest first, capped per run. One bulk statement per chunk.
+ * How many texts a run may still embed. With a rate-limited provider one budget is shared by all
+ * sources and embedding is serialised (`tail`); a provider failure empties it, so the rest of the
+ * run does not pile retries onto the route's time limit. Otherwise each source has its own.
  */
-async function embedMissing(source: JobSource, now: Date): Promise<void> {
+type EmbedBudget = { remaining: number; shared: boolean; tail: Promise<unknown> };
+
+function newBudget(shared: boolean): EmbedBudget {
+  return { remaining: embedBudgetPerRun(), shared, tail: Promise.resolve() };
+}
+
+/**
+ * Embeds live jobs of a source (MANUAL included: it has no adapter, only rows whose embedding
+ * failed when they were created) that have no vector yet, oldest first, within the budget. One
+ * bulk statement per chunk.
+ */
+function embedMissing(source: JobSource, now: Date, budget: EmbedBudget): Promise<void> {
+  if (!budget.shared) return embedMissingNow(source, now, budget);
+  const run = budget.tail.then(() => embedMissingNow(source, now, budget));
+  budget.tail = run.catch(() => {});
+  return run;
+}
+
+async function embedMissingNow(source: JobSource, now: Date, budget: EmbedBudget): Promise<void> {
+  if (budget.remaining <= 0) return;
   const rows = await db.$queryRaw<EmbedRow[]>`
     SELECT "id", "title", "company", "location", "description" FROM "Job"
     WHERE "source" = ${source}::"JobSource" AND "expiresAt" > ${now.toISOString()}::timestamp AND "embedding" IS NULL
-    ORDER BY "fetchedAt" ASC, "id" ASC LIMIT ${embedBudgetPerRun()}`;
+    ORDER BY "fetchedAt" ASC, "id" ASC LIMIT ${budget.remaining}`;
   const embedder = getEmbedder();
   for (let i = 0; i < rows.length; i += EMBED_CHUNK) {
     const chunk = rows.slice(i, i + EMBED_CHUNK);
-    const vectors = await embedder.embed(chunk.map(embeddingText), "document");
+    let vectors: number[][];
+    try {
+      vectors = await embedder.embed(chunk.map(embeddingText), "document");
+    } catch (err) {
+      if (budget.shared) budget.remaining = 0;
+      throw err;
+    }
+    budget.remaining -= chunk.length;
     const values = chunk.map((r, k) => Prisma.sql`(${r.id}, ${toPgVector(vectors[k])})`);
     await db.$executeRaw`UPDATE "Job" AS j SET "embedding" = v.e::vector FROM (VALUES ${Prisma.join(values)}) AS v(id, e) WHERE j."id" = v.id`;
   }
@@ -166,6 +198,7 @@ async function runAdapter(
   force: boolean,
   timeoutMs: number,
   baseFetch: typeof fetch,
+  budget: EmbedBudget,
 ): Promise<IngestSourceReport> {
   const { source } = adapter;
   if (!force) {
@@ -186,6 +219,7 @@ async function runAdapter(
   let fetched = 0;
   let inserted = 0;
   let error: string | undefined;
+  let embedError: string | undefined;
   try {
     const jobs = await fetchWithDeadline(adapter, timeoutMs, baseFetch);
     fetched = jobs.length;
@@ -194,14 +228,22 @@ async function runAdapter(
     error = errorMessage(err);
   }
   try {
-    await embedMissing(source, now);
+    await embedMissing(source, now, budget);
   } catch (err) {
-    error ??= `embedding failed: ${errorMessage(err)}`;
+    // Not the source's error: the fetch worked, and a run recorded with an error would not
+    // count for the source's interval.
+    embedError = errorMessage(err);
   }
   await db.ingestRun.create({
     data: { source, startedAt, finishedAt: new Date(), fetched, inserted, error: error ?? null },
   });
-  return { source, fetched, inserted, ...(error ? { error } : {}) };
+  return {
+    source,
+    fetched,
+    inserted,
+    ...(error ? { error } : {}),
+    ...(embedError ? { embedError } : {}),
+  };
 }
 
 export async function runIngest(
@@ -216,6 +258,10 @@ export async function runIngest(
   const now = opts.now ?? new Date();
   const adapters = opts.adapters ?? getEnabledAdapters();
 
+  const shared = embedBudgetIsShared();
+  const runBudget = newBudget(shared);
+  const budgetFor = () => (shared ? runBudget : newBudget(false));
+
   // Concurrent, so a slow source cannot starve the others inside the route's time budget.
   const settled = await Promise.allSettled(
     adapters.map((a) =>
@@ -225,6 +271,7 @@ export async function runIngest(
         opts.force ?? false,
         opts.timeoutMs ?? ADAPTER_TIMEOUT_MS,
         opts.fetchFn ?? fetch,
+        budgetFor(),
       ),
     ),
   );
@@ -233,6 +280,15 @@ export async function runIngest(
       ? r.value
       : { source: adapters[i].source, fetched: 0, inserted: 0, error: errorMessage(r.reason) },
   );
+
+  // Manual jobs have no adapter; ones saved without a vector are repaired here, from what is
+  // left of the run's budget.
+  let manualEmbedError: string | undefined;
+  try {
+    await embedMissing("MANUAL", now, budgetFor());
+  } catch (err) {
+    manualEmbedError = errorMessage(err);
+  }
 
   // Jobs the demo template points at never expire, so every new demo gets its full content.
   const demoHashes = templateJobHashes();
@@ -244,5 +300,10 @@ export async function runIngest(
     where: { source: { not: "MANUAL" }, expiresAt: { lt: now }, dedupeHash: { notIn: demoHashes } },
   });
   const demoUsersDeleted = await cleanupExpiredDemoUsers(now);
-  return { sources, expired, demoUsersDeleted };
+  return {
+    sources,
+    expired,
+    demoUsersDeleted,
+    ...(manualEmbedError ? { manualEmbedError } : {}),
+  };
 }

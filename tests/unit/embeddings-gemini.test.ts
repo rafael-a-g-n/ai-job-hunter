@@ -107,6 +107,45 @@ describe("GeminiEmbedder", () => {
     expect(sleep).toHaveBeenCalledWith(2000);
   });
 
+  const retryInfo = (delay: string) =>
+    JSON.stringify({
+      error: {
+        code: 429,
+        status: "RESOURCE_EXHAUSTED",
+        details: [
+          { "@type": "type.googleapis.com/google.rpc.Help", links: [] },
+          { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: delay },
+        ],
+      },
+    });
+
+  it("waits the google.rpc.RetryInfo retryDelay of a 429 body when there is no Retry-After", async () => {
+    const { fetchFn, sleep, embedder } = gemini([
+      () => new Response(retryInfo("3.5s"), { status: 429 }),
+      ok,
+    ]);
+    expect(await embedder.embed(["a"], "document")).toHaveLength(1);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(3500);
+  });
+
+  it("fails fast, without sleeping, when the retryDelay is longer than a run can afford", async () => {
+    const { fetchFn, sleep, embedder } = gemini([
+      () => new Response(retryInfo("45s"), { status: 429 }),
+    ]);
+    const err = await embedder.embed(["a"], "document").catch((e: Error) => e);
+    expect(err).toMatchObject({ code: "EMBEDDING_FAILED" });
+    expect((err as Error).message).not.toContain("RESOURCE_EXHAUSTED");
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("falls back to exponential backoff for a 429 body without RetryInfo", async () => {
+    const { sleep, embedder } = gemini([() => new Response("{}", { status: 429 }), ok]);
+    await embedder.embed(["a"], "document");
+    expect(sleep).toHaveBeenCalledWith(1000);
+  });
+
   it("gives up after repeated 5xx with EMBEDDING_FAILED and never leaks the key", async () => {
     const { fetchFn, embedder } = gemini([() => new Response("down", { status: 503 })]);
     const err = await embedder.embed(["a"], "document").catch((e: Error) => e);

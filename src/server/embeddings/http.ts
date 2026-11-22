@@ -47,6 +47,14 @@ function retryAfterMs(res: Response): number | null {
   return Number.isFinite(ms) ? Math.min(Math.max(ms, 0), MAX_RETRY_AFTER_MS) : null;
 }
 
+/** Provider-specific 429 handling, for providers that put the wait in the error body. */
+export type RateLimitHint = {
+  /** Wait in ms read from a 429 response body (never logged); null when it has none. */
+  delayMs: (body: string) => number | null;
+  /** A longer wait than this is not worth it (the run has a deadline): fail at once instead. */
+  maxWaitMs: number;
+};
+
 /**
  * POSTs a JSON body, retrying 429, 5xx, timeouts and network errors (MAX_ATTEMPTS in all) with
  * exponential backoff, or Retry-After when given. Returns the first ok response; any other
@@ -58,6 +66,7 @@ export async function postJsonWithRetry(
   headers: Record<string, string>,
   body: unknown,
   { timeoutMs, sleep }: Required<EmbedHttpOptions>,
+  hint?: RateLimitHint,
 ): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     const backoff = BASE_BACKOFF_MS * 2 ** (attempt - 1);
@@ -81,6 +90,13 @@ export async function postJsonWithRetry(
     if (!retryable || attempt >= MAX_ATTEMPTS) {
       throw new AppError("EMBEDDING_FAILED", `Embedding request failed (${res.status}).`);
     }
-    await sleep(retryAfterMs(res) ?? backoff);
+    let wait = retryAfterMs(res);
+    if (wait === null && hint && res.status === 429) {
+      wait = hint.delayMs(await res.text().catch(() => ""));
+      if (wait !== null && wait > hint.maxWaitMs) {
+        throw new AppError("EMBEDDING_FAILED", "Embedding request failed (429, rate limited).");
+      }
+    }
+    await sleep(wait ?? backoff);
   }
 }

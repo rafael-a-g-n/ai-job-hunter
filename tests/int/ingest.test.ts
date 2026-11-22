@@ -14,19 +14,24 @@ vi.mock("@/server/jobs/sources/index", async (importOriginal) => ({
 }));
 
 let embedFails = false;
+// null = the real provider-based values.
+let budgetOverride: { perRun: number; shared: boolean } | null = null;
+let embedCalls: number[] = [];
 vi.mock("@/server/embeddings/embedder", async (importOriginal) => {
   const orig = await importOriginal<typeof import("@/server/embeddings/embedder")>();
   return {
     ...orig,
+    embedBudgetPerRun: () => budgetOverride?.perRun ?? orig.embedBudgetPerRun(),
+    embedBudgetIsShared: () => budgetOverride?.shared ?? orig.embedBudgetIsShared(),
     getEmbedder: () => {
-      if (embedFails) {
-        return {
-          embed: async () => {
-            throw new Error("voyage down");
-          },
-        };
-      }
-      return orig.getEmbedder();
+      const real = orig.getEmbedder();
+      return {
+        embed: async (texts: string[], kind: "document" | "query") => {
+          embedCalls.push(texts.length);
+          if (embedFails) throw new Error("voyage down");
+          return real.embed(texts, kind);
+        },
+      };
     },
   };
 });
@@ -70,6 +75,8 @@ const embeddedCount = async () =>
 
 afterEach(() => {
   embedFails = false;
+  budgetOverride = null;
+  embedCalls = [];
   vi.restoreAllMocks();
 });
 
@@ -79,7 +86,8 @@ describe("runIngest", () => {
     embedFails = true;
     const first = await runIngest({ adapters: [a] });
     expect(first.sources[0]).toMatchObject({ inserted: 2 });
-    expect(first.sources[0].error).toMatch(/voyage down/);
+    expect(first.sources[0].embedError).toMatch(/voyage down/);
+    expect(first.sources[0].error).toBeUndefined();
     expect(await db.job.count()).toBe(2);
     expect(await embeddedCount()).toBe(0);
 
@@ -88,6 +96,117 @@ describe("runIngest", () => {
     expect(second.sources[0]).toMatchObject({ inserted: 0 });
     expect(second.sources[0].error).toBeUndefined();
     expect(await embeddedCount()).toBe(2);
+  });
+
+  it("shares one embedding budget across concurrent sources when the provider is rate limited", async () => {
+    budgetOverride = { perRun: 40, shared: true };
+    const many = (source: JobSource, offset: number) =>
+      staticAdapter(
+        source,
+        Array.from({ length: 30 }, (_, i) => job(offset + i, { source })),
+      );
+    const report = await runIngest({
+      adapters: [many("ARBEITNOW", 0), many("REMOTIVE", 100), many("ADZUNA", 200)],
+    });
+    expect(report.sources.map((r) => r.inserted)).toEqual([30, 30, 30]);
+    expect(report.sources.every((r) => r.embedError === undefined)).toBe(true);
+    expect(await db.job.count()).toBe(90);
+    expect(await embeddedCount()).toBe(40);
+    expect(embedCalls.reduce((a, b) => a + b, 0)).toBe(40);
+  });
+
+  it("gives every source its own budget when the budget is not shared", async () => {
+    budgetOverride = { perRun: 20, shared: false };
+    const many = (source: JobSource, offset: number) =>
+      staticAdapter(
+        source,
+        Array.from({ length: 30 }, (_, i) => job(offset + i, { source })),
+      );
+    await runIngest({ adapters: [many("ARBEITNOW", 0), many("REMOTIVE", 100)] });
+    expect(await embeddedCount()).toBe(40);
+  });
+
+  it("stops embedding for the rest of the run once the shared budget's provider fails", async () => {
+    budgetOverride = { perRun: 40, shared: true };
+    embedFails = true;
+    const report = await runIngest({
+      adapters: [staticAdapter("ARBEITNOW", [job(1)]), staticAdapter("REMOTIVE", [job(2)])],
+    });
+    expect(embedCalls).toHaveLength(1);
+    expect(report.sources.filter((r) => r.embedError)).toHaveLength(1);
+    expect(await db.job.count()).toBe(2);
+  });
+
+  it("does not count an embedding failure as a failed fetch: the interval still applies", async () => {
+    const calls = { n: 0 };
+    const remotive = adapter(
+      "REMOTIVE",
+      async () => {
+        calls.n++;
+        return [job(1, { source: "REMOTIVE" })];
+      },
+      24,
+    );
+    embedFails = true;
+    const t0 = new Date();
+    const first = await runIngest({ adapters: [remotive], now: t0 });
+    expect(first.sources[0]).toMatchObject({ inserted: 1, embedError: "voyage down" });
+    expect(first.sources[0].error).toBeUndefined();
+    expect((await db.ingestRun.findFirstOrThrow()).error).toBeNull();
+
+    embedFails = false;
+    const again = await runIngest({
+      adapters: [remotive],
+      now: new Date(t0.getTime() + 6 * HOUR),
+    });
+    expect(again.sources[0].skipped).toBe("interval");
+    expect(calls.n).toBe(1);
+  });
+
+  it("embeds manual jobs left without a vector, within the same budget", async () => {
+    await db.user.create({ data: { id: "u1", name: "U", email: "u@example.com" } });
+    const manual = (n: number, expiresAt: Date) =>
+      db.job.create({
+        data: {
+          source: "MANUAL",
+          ownerId: "u1",
+          dedupeHash: `manual-${n}`,
+          title: `Mine ${n}`,
+          company: "C",
+          description: "d",
+          expiresAt,
+        },
+      });
+    const live = new Date(Date.now() + 10 * DAY);
+    for (let n = 1; n <= 4; n++) await manual(n, live);
+    await manual(99, new Date(Date.now() - DAY));
+
+    budgetOverride = { perRun: 5, shared: true };
+    const report = await runIngest({
+      adapters: [staticAdapter("ARBEITNOW", [job(1), job(2), job(3)])],
+    });
+    expect(report.manualEmbedError).toBeUndefined();
+    // 3 new public jobs + 2 of the 4 manual ones fill the budget of 5; the expired one is ignored.
+    expect(await embeddedCount()).toBe(5);
+    const embeddedManual = Number(
+      (
+        await db.$queryRaw<
+          { n: bigint }[]
+        >`SELECT count(*) AS n FROM "Job" WHERE "source" = 'MANUAL' AND "embedding" IS NOT NULL`
+      )[0].n,
+    );
+    expect(embeddedManual).toBe(2);
+
+    budgetOverride = null;
+    await runIngest({ adapters: [] });
+    expect(await embeddedCount()).toBe(7);
+    expect(
+      (
+        await db.$queryRaw<
+          { embedded: boolean }[]
+        >`SELECT "embedding" IS NOT NULL AS embedded FROM "Job" WHERE "dedupeHash" = 'manual-99'`
+      )[0].embedded,
+    ).toBe(false);
   });
 
   it("refreshes many existing jobs in bulk, without per-row updates", async () => {

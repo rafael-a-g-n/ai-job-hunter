@@ -16,10 +16,19 @@ export function getEmbedder(): Embedder {
 }
 
 /**
- * Most jobs one ingest run embeds per source (new rows plus repair). The Gemini free tier is
- * small (about 100 requests/min and 1,000 a day, each text counting as one request, and ~30k
- * tokens/min), so it embeds fewer per run; the backlog drains over the next runs.
+ * Most jobs an ingest run embeds (new rows plus repair). The Gemini free tier is small (about
+ * 100 requests/min and 1,000 a day, each text counting as one request, and ~30k tokens/min), so
+ * its budget is small and GLOBAL to the run (see embedBudgetIsShared); the backlog drains over
+ * the next runs. Voyage keeps 500 per source.
  */
 export function embedBudgetPerRun(): number {
-  return env.EMBEDDINGS_PROVIDER === "gemini" ? 50 : 500;
+  return env.EMBEDDINGS_PROVIDER === "gemini" ? 40 : 500;
+}
+
+/**
+ * True when one budget covers the whole run. Sources ingest concurrently, so a per-source budget
+ * would multiply the load on a rate-limited provider (Gemini) by the number of sources.
+ */
+export function embedBudgetIsShared(): boolean {
+  return env.EMBEDDINGS_PROVIDER === "gemini";
 }
