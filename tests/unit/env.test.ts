@@ -23,6 +23,29 @@ describe("parseEnv", () => {
     it("keeps a configured country, trimmed", () => {
       expect(parseEnv({ ...valid, CANDIDATE_COUNTRY: " Spain " }).CANDIDATE_COUNTRY).toBe("Spain");
     });
+
+    it.each([
+      ["Czech Republic", "Czechia"],
+      ["czech republic", "Czechia"],
+      ["UK", "United Kingdom"],
+      ["Great Britain", "United Kingdom"],
+      ["USA", "United States"],
+      ["Holland", "Netherlands"],
+      ["portugal", "Portugal"],
+      ["Brazil", "Brazil"],
+      ["Bosnia & Herzegovina", "Bosnia and Herzegovina"],
+    ])("normalises %j to %j", (input, expected) => {
+      expect(parseEnv({ ...valid, CANDIDATE_COUNTRY: input }).CANDIDATE_COUNTRY).toBe(expected);
+    });
+
+    it("rejects a name that is not a country, saying to use the English name", () => {
+      expect(() => parseEnv({ ...valid, CANDIDATE_COUNTRY: "Lisbon" })).toThrow(
+        /CANDIDATE_COUNTRY.*English name/,
+      );
+      expect(() => parseEnv({ ...valid, CANDIDATE_COUNTRY: "Portugl" })).toThrow(
+        /CANDIDATE_COUNTRY/,
+      );
+    });
   });
 
   describe("JOB_SOURCES", () => {

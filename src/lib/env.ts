@@ -4,6 +4,7 @@ import {
   DEFAULT_ADZUNA_COUNTRIES,
   MAX_ADZUNA_COUNTRIES,
 } from "./adzuna-countries";
+import { canonicalCountry } from "@/server/jobs/countries";
 
 /** Treat empty strings (e.g. `KEY=` in .env files) as unset. */
 const optionalStr = z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional());
@@ -78,7 +79,20 @@ const schema = z
     ADZUNA_COUNTRIES: adzunaCountries,
     CANDIDATE_COUNTRY: z.preprocess(
       (v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined),
-      z.string().default("Portugal"),
+      z
+        .string()
+        .default("Portugal")
+        .transform((v, ctx) => {
+          const country = canonicalCountry(v);
+          if (!country) {
+            ctx.addIssue({
+              code: "custom",
+              message: `"${v}" is not a country; use its English name, for example Portugal, Czechia or United Kingdom`,
+            });
+            return z.NEVER;
+          }
+          return country;
+        }),
     ),
     JOB_SOURCES: jobSources,
     CRON_SECRET: z.string().min(1),

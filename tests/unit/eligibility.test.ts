@@ -97,6 +97,92 @@ describe("isEligibleLocation for other candidates", () => {
   });
 });
 
+describe("isEligibleLocation: qualifiers and look-alikes", () => {
+  it.each([
+    "Anywhere in the US",
+    "Anywhere in the USA",
+    "Global (US only)",
+    "Worldwide, US only",
+    "Worldwide, based in the US",
+    "Worldwide except Europe",
+    "Worldwide excluding Portugal",
+    "Worldwide (excluding EMEA)",
+    "Europe except Portugal",
+    "EU excluding Portugal",
+    "Eastern Europe",
+    "Central Europe",
+    "Central and Eastern Europe",
+    "CEE",
+    "Nordics",
+    "Scandinavia",
+    "DACH",
+    "Benelux",
+    "Balkans",
+    "Anywhere in North America",
+    "Worldwide, residents of Canada",
+  ])("rejects %j", (text) => {
+    expect(isEligibleLocation(text, "Portugal")).toBe(false);
+  });
+
+  it.each([
+    "Worldwide except US",
+    "Worldwide excluding USA, Canada",
+    "Anywhere in the world",
+    "Anywhere in Europe",
+    "Worldwide (Europe only)",
+    "Europe only",
+    "Europe except UK",
+    "Eastern Europe, Portugal",
+    "Global, based in Portugal",
+    "Worldwide, remote only",
+  ])("accepts %j", (text) => {
+    expect(isEligibleLocation(text, "Portugal")).toBe(true);
+  });
+
+  it("applies the exclusion to the candidate's own country", () => {
+    expect(isEligibleLocation("Europe except UK", "United Kingdom")).toBe(false);
+    expect(isEligibleLocation("Worldwide except Brazil", "Brazil")).toBe(false);
+    expect(isEligibleLocation("Worldwide except Europe", "Brazil")).toBe(true);
+  });
+});
+
+describe("isEligibleLocation: time zones (candidate in Portugal)", () => {
+  it.each([
+    "UTC+0",
+    "UTC",
+    "GMT",
+    "WET",
+    "UTC+1",
+    "UTC-1 to UTC+3",
+    "UTC+0 to UTC+4",
+    "UTC-3-UTC+3",
+    "UTC ± 3",
+    "GMT +/- 2",
+    "CET +/- 2",
+    "CET-1 to CET+2",
+    "Iberia",
+    "UK timezone",
+    "UK time zone",
+  ])("accepts %j", (text) => {
+    expect(isEligibleLocation(text, "Portugal")).toBe(true);
+  });
+
+  it.each([
+    "UTC-5",
+    "UTC-8 to UTC-5",
+    "UTC+2 to UTC+5",
+    "UTC+5:30",
+    "US timezones (UTC-8 to UTC-5)",
+  ])("rejects %j", (text) => {
+    expect(isEligibleLocation(text, "Portugal")).toBe(false);
+  });
+
+  it("is only used for candidates in Europe", () => {
+    expect(isEligibleLocation("UTC+0", "Brazil")).toBe(false);
+    expect(isEligibleLocation("GMT", "Brazil")).toBe(false);
+  });
+});
+
 describe("scopeLabel", () => {
   it.each([
     ["Worldwide", "Worldwide"],
@@ -110,7 +196,9 @@ describe("scopeLabel", () => {
     ["CET timezone", "Europe"],
     ["Americas, Europe", "Europe & Americas"],
     ["Europe, Americas", "Europe & Americas"],
-    ["LATAM, Europe, USA, Canada, APAC", "Europe"],
+    ["LATAM, Europe, USA, Canada, APAC", "Europe & more"],
+    ["EMEA, LATAM, Canada, USA", "EMEA & Americas"],
+    ["Europe, Africa", "Europe & more"],
     ["Portugal", "Portugal"],
     ["portugal", "Portugal"],
     ["UK", "United Kingdom"],
@@ -150,6 +238,17 @@ describe("scopeFromCountries (Himalayas locationRestrictions)", () => {
 
   it("labels Europe plus a few countries elsewhere", () => {
     expect(scopeFromCountries([...europe, "India", "Japan"])).toBe("Europe & more");
+  });
+
+  it("does not call Europe plus Asia and the Americas 'Europe & Americas'", () => {
+    const label = scopeFromCountries([...europe, "United States", "India", "Japan", "Brazil"]);
+    expect(label).toBe("Europe & more");
+  });
+
+  it("is honest for a list with Asia, Africa and the Americas", () => {
+    const label = scopeFromCountries([...europe, "Nigeria", "Brazil"]);
+    expect(label).toBe("Europe & more");
+    expect(label.length).toBeLessThanOrEqual(40);
   });
 
   it("labels Europe plus the Americas", () => {

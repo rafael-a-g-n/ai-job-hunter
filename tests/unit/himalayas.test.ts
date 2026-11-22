@@ -77,8 +77,8 @@ describe("Himalayas adapter", () => {
     const jobs = await createHimalayasAdapter("Portugal").fetchJobs(asFetch(fetchFn));
     expect(jobs.map((j) => j.remoteScope)).toEqual([
       "Worldwide",
-      "Europe & Americas",
-      "EMEA",
+      "Europe & more",
+      "Europe & more",
       "Portugal",
       "Europe",
     ]);

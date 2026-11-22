@@ -242,7 +242,7 @@ describe("Remotive adapter", () => {
     const jobs = await remotiveAdapter.fetchJobs(asFetch(stubFetch(raw)));
     // fixture locations: USA, USA/Canada (x2), Worldwide, "LATAM, Europe, USA, Canada, APAC"
     expect(jobs.map((j) => j.externalId)).toEqual(["1680495", "2091137"]);
-    expect(jobs.map((j) => j.remoteScope)).toEqual(["Worldwide", "Europe"]);
+    expect(jobs.map((j) => j.remoteScope)).toEqual(["Worldwide", "Europe & more"]);
     const src = raw.jobs.find((j) => String(j.id) === jobs[0].externalId)!;
     expect(jobs[0]).toMatchObject({
       source: "REMOTIVE",
