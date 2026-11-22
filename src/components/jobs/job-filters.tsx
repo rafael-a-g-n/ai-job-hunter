@@ -3,7 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { sourceLabel } from "./posted-ago";
 
-export const JOB_SOURCES = [
+/** Every value the source filter accepts (not only the enabled ones). */
+export const SOURCE_OPTIONS = [
   "HIMALAYAS",
   "REMOTIVE",
   "JOBICY",

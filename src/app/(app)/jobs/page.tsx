@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { JobCard } from "@/components/jobs/job-card";
-import { JOB_SOURCES, JobFilters } from "@/components/jobs/job-filters";
+import { SOURCE_OPTIONS, JobFilters } from "@/components/jobs/job-filters";
 import { Pagination } from "@/components/jobs/pagination";
 import { EmptyState } from "@/components/app/empty-state";
 import { env } from "@/lib/env";
@@ -10,9 +10,15 @@ import { savedJobIds } from "@/server/jobs/saved";
 import { searchJobs } from "@/server/jobs/search";
 import { PageSkeleton } from "@/components/app/page-skeleton";
 
-/** Sources of the dropdown: those in JOB_SOURCES, the user's own pasted jobs, and the current pick. */
+/**
+ * Sources of the dropdown: those in JOB_SOURCES that can actually run (Adzuna needs both of its
+ * keys), the user's own pasted jobs, and the current pick.
+ */
 function filterSources(selected: string | undefined): string[] {
-  const list = [...env.JOB_SOURCES.map((s) => s.toUpperCase()), "MANUAL"];
+  const usable = env.JOB_SOURCES.filter(
+    (s) => s !== "adzuna" || (env.ADZUNA_APP_ID && env.ADZUNA_APP_KEY),
+  );
+  const list = [...usable.map((s) => s.toUpperCase()), "MANUAL"];
   if (selected && !list.includes(selected)) list.push(selected);
   return list;
 }
@@ -29,7 +35,7 @@ async function Results({ searchParams }: { searchParams: Promise<Params> }) {
   const location = first(sp.location).trim().slice(0, 200);
   const remote = first(sp.remote) === "1";
   const sourceParam = first(sp.source);
-  const source = JOB_SOURCES.find((s) => s === sourceParam);
+  const source = SOURCE_OPTIONS.find((s) => s === sourceParam);
   const pageNumber = Number.parseInt(first(sp.page), 10);
 
   const result = await searchJobs(user.id, {
