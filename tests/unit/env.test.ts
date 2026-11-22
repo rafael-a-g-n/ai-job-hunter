@@ -30,6 +30,18 @@ describe("parseEnv", () => {
     ).not.toThrow();
   });
 
+  it("requires GOOGLE_GENERATIVE_AI_API_KEY when EMBEDDINGS_PROVIDER is gemini", () => {
+    expect(() => parseEnv({ ...valid, EMBEDDINGS_PROVIDER: "gemini" })).toThrow(
+      /GOOGLE_GENERATIVE_AI_API_KEY/,
+    );
+    expect(() =>
+      parseEnv({ ...valid, EMBEDDINGS_PROVIDER: "gemini", GOOGLE_GENERATIVE_AI_API_KEY: "" }),
+    ).toThrow(/GOOGLE_GENERATIVE_AI_API_KEY/);
+    expect(() =>
+      parseEnv({ ...valid, EMBEDDINGS_PROVIDER: "gemini", GOOGLE_GENERATIVE_AI_API_KEY: "k" }),
+    ).not.toThrow();
+  });
+
   it("passes with the mock AI provider and no key", () => {
     expect(() => parseEnv({ ...valid, AI_PROVIDER: "mock" })).not.toThrow();
   });

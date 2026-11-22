@@ -2,9 +2,9 @@ import { Prisma, type JobSource } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { cleanupExpiredDemoUsers } from "@/server/demo/cleanup";
 import { templateJobHashes } from "@/server/demo/template";
-import { getEmbedder } from "@/server/embeddings/embedder";
+import { embedBudgetPerRun, getEmbedder } from "@/server/embeddings/embedder";
 import { toPgVector } from "@/server/embeddings/vector";
-import { MAX_BATCH_INPUTS } from "@/server/embeddings/voyage";
+import { MAX_BATCH_INPUTS } from "@/server/embeddings/http";
 import { computeDedupeHash, getEnabledAdapters } from "./sources";
 import type { JobSourceAdapter, NormalizedJob } from "./sources";
 
@@ -66,8 +66,7 @@ export function embeddingText(j: {
   return [j.title, j.company, j.location ?? "", j.description.slice(0, 2000)].join("\n");
 }
 
-const EMBED_REPAIR_CAP = 500;
-// One Voyage request's worth (see MAX_BATCH_INPUTS), so a chunk is written as soon as it is embedded.
+// One request's worth (see MAX_BATCH_INPUTS), so a chunk is written as soon as it is embedded.
 const EMBED_CHUNK = MAX_BATCH_INPUTS;
 const REFRESH_CHUNK = 1000;
 
@@ -151,7 +150,7 @@ async function embedMissing(source: JobSource, now: Date): Promise<void> {
   const rows = await db.$queryRaw<EmbedRow[]>`
     SELECT "id", "title", "company", "location", "description" FROM "Job"
     WHERE "source" = ${source}::"JobSource" AND "expiresAt" > ${now.toISOString()}::timestamp AND "embedding" IS NULL
-    ORDER BY "fetchedAt" ASC, "id" ASC LIMIT ${EMBED_REPAIR_CAP}`;
+    ORDER BY "fetchedAt" ASC, "id" ASC LIMIT ${embedBudgetPerRun()}`;
   const embedder = getEmbedder();
   for (let i = 0; i < rows.length; i += EMBED_CHUNK) {
     const chunk = rows.slice(i, i + EMBED_CHUNK);

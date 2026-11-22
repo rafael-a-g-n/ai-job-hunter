@@ -17,7 +17,7 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
 | Service | Where | Env variables |
 |---|---|---|
 | Anthropic | console.anthropic.com, API keys. Set a spend limit there too. | `ANTHROPIC_API_KEY` |
-| Google AI Studio | aistudio.google.com/apikey, create an API key (free tier, see "Free tier: Google Gemini" below). Alternative to Anthropic. | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| Google AI Studio | aistudio.google.com/apikey, create an API key (free tier, see "Free tier: Google Gemini" below). Alternative to Anthropic, and to Voyage for embeddings (same key). | `GOOGLE_GENERATIVE_AI_API_KEY` |
 | Voyage AI | dash.voyageai.com, API keys. Add a payment method: without one the account is limited to 3 requests per minute, too few for ingest (the free token allowance still applies once a card is on file). | `VOYAGE_API_KEY` |
 | Adzuna | developer.adzuna.com, free app id and key (optional; the source is skipped without them) | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` |
 | Resend | resend.com: add and verify a sending domain (DNS records), then create an API key | `RESEND_API_KEY`, `EMAIL_FROM` |
@@ -44,9 +44,9 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
    | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` (at least 32 chars) |
    | `AI_PROVIDER` | `anthropic`, or `google` for Gemini |
    | `ANTHROPIC_API_KEY` | from step 2 (when `AI_PROVIDER=anthropic`) |
-   | `GOOGLE_GENERATIVE_AI_API_KEY` | from step 2 (when `AI_PROVIDER=google`) |
-   | `EMBEDDINGS_PROVIDER` | `voyage` |
-   | `VOYAGE_API_KEY` | from step 2 |
+   | `GOOGLE_GENERATIVE_AI_API_KEY` | from step 2 (when `AI_PROVIDER=google` or `EMBEDDINGS_PROVIDER=gemini`) |
+   | `EMBEDDINGS_PROVIDER` | `voyage`, or `gemini` for Gemini Embedding |
+   | `VOYAGE_API_KEY` | from step 2 (when `EMBEDDINGS_PROVIDER=voyage`) |
    | `STORAGE_PROVIDER` | `vercel-blob` |
    | `BLOB_READ_WRITE_TOKEN` | added by the Blob store |
    | `MAIL_PROVIDER` | `resend` |
@@ -68,6 +68,19 @@ Setting `AI_PROVIDER=google` runs the app on the Gemini API free tier (`gemini-3
 - On the free tier Google may use prompts and responses to improve its products. That includes the text of uploaded CVs, so tell users before enabling it for real people, or use a paid Gemini key (which is not used for training).
 - In AI Studio, confirm that the free tier is available for your account and region, and check the rate limits shown there for these two models; a limit that is too low shows up as failed AI calls.
 - The free tier bills $0, but the app still records a cost from Gemini's paid list prices (`src/server/ai/models.ts`), so `GLOBAL_DAILY_AI_BUDGET_USD` keeps working as an abuse cap.
+
+Setting `EMBEDDINGS_PROVIDER=gemini` embeds with `gemini-embedding-001` through the same key (no Voyage account needed). Vectors are requested at 1024 dimensions, so the database columns stay as they are, and are L2-normalised in the app.
+
+- Google does not publish free-tier numbers for embeddings in its docs; check the limits for "Gemini Embedding" in AI Studio. The app assumes roughly 100 requests/min, 30k tokens/min and 1,000 requests/day, with every text in a batch counted as a request.
+- To stay inside that, each ingest run embeds at most 50 jobs per source (500 with Voyage). New jobs and the repair of earlier failures share that budget, oldest first, so a backlog drains over the next runs (ingest runs every 6 hours).
+- **Switching embedding provider requires re-embedding.** Vectors from different models are not comparable, so after changing `EMBEDDINGS_PROVIDER` between `voyage` and `gemini` (or the fake), clear the old ones in the Neon SQL editor:
+
+  ```sql
+  UPDATE "Job" SET embedding = NULL;
+  UPDATE "Cv" SET embedding = NULL;
+  ```
+
+  Jobs are re-embedded by the next ingest (`embedMissing`, up to the per-run budget above; matches only show jobs that have a vector, so they reappear as ingest catches up). CVs are re-embedded lazily: the next time a user opens the matches page, `ensureCvEmbedding` sees the missing vector and embeds the stored CV profile (one request). Until then, nothing else is needed.
 
 ## 4. GitHub Actions secrets
 

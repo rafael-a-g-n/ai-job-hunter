@@ -16,7 +16,7 @@ const schema = z
     AI_PROVIDER: z.enum(["anthropic", "google", "mock"]),
     ANTHROPIC_API_KEY: optionalStr,
     GOOGLE_GENERATIVE_AI_API_KEY: optionalStr,
-    EMBEDDINGS_PROVIDER: z.enum(["voyage", "fake"]),
+    EMBEDDINGS_PROVIDER: z.enum(["voyage", "gemini", "fake"]),
     VOYAGE_API_KEY: optionalStr,
     STORAGE_PROVIDER: z.enum(["vercel-blob", "local"]),
     BLOB_READ_WRITE_TOKEN: optionalStr,
@@ -36,6 +36,7 @@ const schema = z
       [e.AI_PROVIDER === "anthropic", "ANTHROPIC_API_KEY"],
       [e.AI_PROVIDER === "google", "GOOGLE_GENERATIVE_AI_API_KEY"],
       [e.EMBEDDINGS_PROVIDER === "voyage", "VOYAGE_API_KEY"],
+      [e.EMBEDDINGS_PROVIDER === "gemini", "GOOGLE_GENERATIVE_AI_API_KEY"],
       [e.STORAGE_PROVIDER === "vercel-blob", "BLOB_READ_WRITE_TOKEN"],
       [e.MAIL_PROVIDER === "resend", "RESEND_API_KEY"],
     ];
