@@ -14,9 +14,24 @@ const SOURCE_LABELS: Record<string, string> = {
   ARBEITNOW: "Arbeitnow",
   REMOTIVE: "Remotive",
   HIMALAYAS: "Himalayas",
+  JOBICY: "Jobicy",
   MANUAL: "Pasted by you",
 };
 
 export function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? source;
+}
+
+/** Home page of each external source; their terms ask for a visible credit that links there. */
+const SOURCE_SITES: Record<string, string> = {
+  ADZUNA: "https://www.adzuna.com",
+  ARBEITNOW: "https://www.arbeitnow.com",
+  HIMALAYAS: "https://himalayas.app",
+  JOBICY: "https://jobicy.com",
+  REMOTIVE: "https://remotive.com",
+};
+
+/** The source's home page, or null for jobs without an external source (pasted by the user). */
+export function sourceSite(source: string): string | null {
+  return SOURCE_SITES[source] ?? null;
 }

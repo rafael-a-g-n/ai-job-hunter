@@ -2,7 +2,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export const JOB_SOURCES = ["HIMALAYAS", "REMOTIVE", "ARBEITNOW", "ADZUNA", "MANUAL"] as const;
+export const JOB_SOURCES = [
+  "HIMALAYAS",
+  "REMOTIVE",
+  "JOBICY",
+  "ARBEITNOW",
+  "ADZUNA",
+  "MANUAL",
+] as const;
 
 /** Plain GET form: filters live in the URL and need no client JS. Submitting resets to page 1. */
 export function JobFilters({
@@ -37,6 +44,7 @@ export function JobFilters({
           <option value="">All sources</option>
           <option value="HIMALAYAS">Himalayas</option>
           <option value="REMOTIVE">Remotive</option>
+          <option value="JOBICY">Jobicy</option>
           <option value="ARBEITNOW">Arbeitnow</option>
           <option value="ADZUNA">Adzuna</option>
           <option value="MANUAL">Pasted by you</option>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { SourceCredit } from "@/components/jobs/source-credit";
 import { postedAgo, sourceLabel } from "@/components/jobs/posted-ago";
 import { DeleteJobButton } from "@/components/jobs/delete-job-button";
 import { JobDescription } from "@/components/jobs/job-description";
@@ -68,18 +69,7 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
             View the original posting
           </a>
         )}
-        {job.source === "HIMALAYAS" && (
-          <p className="text-xs text-muted-foreground">
-            <a
-              href="https://himalayas.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-4"
-            >
-              Jobs from Himalayas
-            </a>
-          </p>
-        )}
+        <SourceCredit source={job.source} />
       </div>
 
       {match && match.score !== null && (

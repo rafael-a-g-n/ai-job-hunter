@@ -2,6 +2,7 @@ import { env, type JobSourceName } from "@/lib/env";
 import { adzunaAdapterFromEnv } from "./adzuna";
 import { arbeitnowAdapter } from "./arbeitnow";
 import { himalayasAdapterFromEnv } from "./himalayas";
+import { jobicyAdapterFromEnv } from "./jobicy";
 import { remotiveAdapterFromEnv } from "./remotive";
 import type { JobSourceAdapter } from "./types";
 
@@ -17,8 +18,7 @@ export { SOURCES_CONFIG } from "./config";
 const REGISTRY: Record<JobSourceName, () => JobSourceAdapter | null> = {
   himalayas: himalayasAdapterFromEnv,
   remotive: remotiveAdapterFromEnv,
-  // jobicy is added by its own task.
-  jobicy: () => null,
+  jobicy: jobicyAdapterFromEnv,
   arbeitnow: () => arbeitnowAdapter,
   adzuna: adzunaAdapterFromEnv,
 };
