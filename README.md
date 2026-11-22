@@ -29,9 +29,9 @@ flowchart LR
   Browser --> App["Next.js app (Vercel)<br/>RSC, Server Actions, Route Handlers"]
   App --> DB[("Postgres + pgvector (Neon)")]
   App --> Blob["Vercel Blob<br/>CV files"]
-  App --> Claude["Anthropic Claude<br/>via Vercel AI SDK"]
-  App --> Voyage["Voyage AI<br/>embeddings"]
-  App --> Resend["Resend<br/>email"]
+  App --> Claude["Anthropic Claude or Google Gemini<br/>via Vercel AI SDK"]
+  App --> Voyage["Voyage AI or Gemini Embedding<br/>embeddings"]
+  App --> Resend["Resend or Brevo<br/>email"]
   App --> TS[Cloudflare Turnstile]
   GHA["GitHub Actions<br/>every 6 h"] -->|"POST /api/cron/ingest"| App
   App -->|ingest| Sources["Adzuna, Arbeitnow, Remotive"]
@@ -39,7 +39,7 @@ flowchart LR
 
 ## Stack
 
-Next.js 16 (App Router, `cacheComponents`), React 19, TypeScript (strict), Tailwind CSS 4 and shadcn/ui, Prisma 7 on Postgres with pgvector, Better Auth, Vercel AI SDK with Anthropic Claude (`claude-haiku-5-5` for extraction and re-rank, `claude-sonnet-5-5` for letters) or, selectable by env, Google Gemini on its free tier (`gemini-3.5-flash-lite`, `gemini-3.6-flash`), Voyage `voyage-3.5-lite` embeddings (1024 dimensions), Zod 4, Vitest and Playwright.
+Next.js 16 (App Router, `cacheComponents`), React 19, TypeScript (strict), Tailwind CSS 4 and shadcn/ui, Prisma 7 on Postgres with pgvector, Better Auth, Vercel AI SDK with Anthropic Claude (`claude-haiku-5-5` for CV analysis, extraction and re-rank, `claude-sonnet-5-5` for letters) or, selectable by env, Google Gemini on its free tier (`gemini-3.5-flash-lite` for the same, `gemini-3.6-flash` for letters), Voyage `voyage-3.5-lite` or, selectable, Gemini Embedding `gemini-embedding-001` (both 1024 dimensions), Resend or, selectable, Brevo for email, Zod 4, Vitest and Playwright.
 
 ## How it works
 

@@ -3,8 +3,9 @@ import { env } from "@/lib/env";
 /**
  * Model ids per provider. The mock provider reports the Anthropic ids, so recorded AiCall rows
  * look the same as before. Google ids are on the Gemini API free tier (checked 2026-11-22,
- * https://ai.google.dev/gemini-api/docs/pricing): a Flash-Lite model for the cheap, frequent
- * calls and a Flash model for the CV analysis.
+ * https://ai.google.dev/gemini-api/docs/pricing): the `fast` tier (a Flash-Lite model) serves
+ * the CV analysis, job normalising and re-ranking; only the cover letters use `strong` (a Flash
+ * model).
  */
 export const MODELS = {
   anthropic: { fast: "claude-haiku-5-5", strong: "claude-sonnet-5-5" },
