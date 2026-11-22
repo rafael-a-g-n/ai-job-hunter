@@ -5,6 +5,7 @@ import { describeError, resolveDeps, safeRecord, type AiDeps } from "./deps";
 import type { MockKey } from "./mock";
 import type { ModelTier } from "./models";
 import { getModel } from "./provider";
+import { PROVIDER_OPTIONS } from "./provider-options";
 
 export type StreamAiTextOptions = {
   purpose: string;
@@ -30,6 +31,8 @@ export async function streamAiText(opts: StreamAiTextOptions, deps: AiDeps = {})
   const base = { purpose: opts.purpose, userId: opts.userId, model: opts.model };
   let streamed = "";
   // An aborted or failed stream still cost money: estimate it so the global budget sees it.
+  // Gemini thinking tokens are billed as output but never streamed, so they are missing from this
+  // estimate; PROVIDER_OPTIONS keeps them near zero ("minimal"), so the gap is small.
   const estimated = () => ({
     inputTokens: estimateTokens(opts.system + opts.prompt),
     outputTokens: estimateTokens(streamed),
@@ -41,6 +44,7 @@ export async function streamAiText(opts: StreamAiTextOptions, deps: AiDeps = {})
     prompt: opts.prompt,
     maxRetries: 0,
     maxOutputTokens: opts.maxOutputTokens,
+    providerOptions: PROVIDER_OPTIONS,
     abortSignal: opts.abortSignal,
     onChunk: ({ chunk }) => {
       if (chunk.type === "text-delta") streamed += chunk.text;

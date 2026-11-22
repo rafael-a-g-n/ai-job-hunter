@@ -10,7 +10,7 @@ vi.mock("@/server/auth/session", () => ({
 }));
 
 const streamControl = vi.hoisted(() => ({
-  mode: "real" as "real" | "error" | "empty" | "silent",
+  mode: "real" as "real" | "error" | "empty" | "silent" | "truncated",
 }));
 vi.mock("@/server/ai/stream", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/ai/stream")>();
@@ -25,6 +25,10 @@ vi.mock("@/server/ai/stream", async (importOriginal) => {
       }
       const fullStream = new ReadableStream({
         start(c) {
+          if (streamControl.mode === "truncated") {
+            c.enqueue({ type: "text-delta", id: "t", text: "Dear Hiring Manager, I am" });
+            c.enqueue({ type: "finish", finishReason: "length", rawFinishReason: "MAX_TOKENS" });
+          }
           if (streamControl.mode === "error") {
             c.enqueue({ type: "text-delta", id: "t", text: "Dear" });
             c.enqueue({ type: "error", error: new Error("provider exploded") });
@@ -137,6 +141,22 @@ describe("POST /api/letters/stream", () => {
     await makeCv(A);
     const job = await makeJob();
     streamControl.mode = "empty";
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await POST(request(job.id));
+      await expect(res.text()).rejects.toThrow();
+    } finally {
+      streamControl.mode = "real";
+      spy.mockRestore();
+    }
+    expect(await db.coverLetter.count()).toBe(0);
+    expect(await usageCount()).toBe(0);
+  });
+
+  it("refunds the usage and saves nothing when the model's output was truncated (finishReason length)", async () => {
+    await makeCv(A);
+    const job = await makeJob();
+    streamControl.mode = "truncated";
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const res = await POST(request(job.id));

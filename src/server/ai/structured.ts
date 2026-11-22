@@ -12,6 +12,7 @@ import type { ModelTier } from "./models";
 import { estimateTokens } from "./estimate";
 import { describeError, resolveDeps, safeRecord, type AiDeps } from "./deps";
 import { getModel } from "./provider";
+import { PROVIDER_OPTIONS } from "./provider-options";
 
 export type GenerateStructuredOptions<T> = {
   purpose: string;
@@ -105,6 +106,7 @@ export async function generateStructured<T>(
           abortSignal,
           maxRetries: 0,
           maxOutputTokens: opts.maxOutputTokens,
+          providerOptions: PROVIDER_OPTIONS,
         }),
       );
     } catch (err) {

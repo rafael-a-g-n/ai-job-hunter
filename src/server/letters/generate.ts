@@ -16,7 +16,7 @@ export const LETTER_ID_HEADER = "X-Letter-Id";
 /**
  * Streams a cover letter as plain text. The letter id is chosen up front and sent in the
  * `X-Letter-Id` header; the row is saved before the stream closes, so when the client sees the
- * stream end the letter exists. A failed stream saves nothing and refunds the usage. A cancelled
+ * stream end the letter exists. A failed stream (or one the model cut off at the output cap) saves nothing and refunds the usage. A cancelled
  * stream saves nothing either, but refunds only if no text had been sent yet: once the model has
  * produced output the unit is spent (otherwise cancelling would give unlimited free generations).
  */
@@ -66,6 +66,7 @@ export async function streamLetter(
   let text = "";
   let cancelled = false;
   let sentText = false;
+  let truncated = false;
 
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -74,6 +75,7 @@ export async function streamLetter(
           const { done, value } = await reader.read();
           if (done) break;
           if (value.type === "error") throw value.error;
+          if (value.type === "finish" && value.finishReason === "length") truncated = true;
           if (value.type === "text-delta") {
             text += value.text;
             sentText = true;
@@ -82,6 +84,8 @@ export async function streamLetter(
           }
         }
         if (cancelled) return;
+        // The model hit the output cap (not the user aborting): a cut-off letter is a failure.
+        if (truncated) throw new Error("The model's output was truncated.");
         const content = text.trim().slice(0, MAX_LETTER_CHARS);
         if (!content) throw new Error("The model returned an empty letter.");
         await db.coverLetter.create({
