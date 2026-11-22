@@ -34,6 +34,7 @@ export const arbeitnowAdapter: JobSourceAdapter = {
           company: j.company_name.trim(),
           location: j.location.trim() || null,
           remote: j.remote,
+          remoteScope: null,
           description: htmlToText(j.description),
           url: j.url,
           salaryMin: null,

@@ -32,6 +32,31 @@ const adzunaCountries = z.preprocess(
     .max(MAX_ADZUNA_COUNTRIES),
 );
 
+export const JOB_SOURCE_NAMES = ["himalayas", "remotive", "jobicy", "arbeitnow", "adzuna"] as const;
+export type JobSourceName = (typeof JOB_SOURCE_NAMES)[number];
+export const DEFAULT_JOB_SOURCES: JobSourceName[] = ["himalayas", "remotive", "jobicy"];
+
+/** "Remotive, jobicy" becomes ["remotive", "jobicy"]; unset or empty gives the default. */
+const jobSources = z.preprocess(
+  (v) => {
+    const list =
+      typeof v === "string"
+        ? [
+            ...new Set(
+              v
+                .split(",")
+                .map((s) => s.trim().toLowerCase())
+                .filter(Boolean),
+            ),
+          ]
+        : [];
+    return list.length > 0 ? list : DEFAULT_JOB_SOURCES;
+  },
+  z
+    .array(z.enum(JOB_SOURCE_NAMES, { error: `must be a list of ${JOB_SOURCE_NAMES.join(", ")}` }))
+    .min(1),
+);
+
 const schema = z
   .object({
     DATABASE_URL: z.string().min(1),
@@ -51,6 +76,11 @@ const schema = z
     ADZUNA_APP_ID: optionalStr,
     ADZUNA_APP_KEY: optionalStr,
     ADZUNA_COUNTRIES: adzunaCountries,
+    CANDIDATE_COUNTRY: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined),
+      z.string().default("Portugal"),
+    ),
+    JOB_SOURCES: jobSources,
     CRON_SECRET: z.string().min(1),
     TURNSTILE_SECRET_KEY: optionalStr,
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: optionalStr,

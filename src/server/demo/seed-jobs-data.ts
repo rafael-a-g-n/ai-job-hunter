@@ -202,6 +202,7 @@ export function extraSeedJobs(): NormalizedJob[] {
     company: e.company,
     location: e.location,
     remote: e.remote,
+    remoteScope: null,
     description: `${e.about} You will work with ${e.stack}. We offer a collaborative team, flexible hours and room to grow. Remote work: ${e.remote ? "yes" : "hybrid in the office"}.`,
     url: `https://example.com/jobs/seed-${i + 1}`,
     salaryMin: e.salary?.[0] ?? null,

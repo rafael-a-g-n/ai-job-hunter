@@ -19,7 +19,7 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
 | Anthropic | console.anthropic.com, API keys. Set a spend limit there too. | `ANTHROPIC_API_KEY` |
 | Google AI Studio | aistudio.google.com/apikey, create an API key (free tier, see "Free tier: Google Gemini" below). Alternative to Anthropic, and to Voyage for embeddings (same key). | `GOOGLE_GENERATIVE_AI_API_KEY` |
 | Voyage AI | dash.voyageai.com, API keys. Add a payment method: without one the account is limited to 3 requests per minute, too few for ingest (the free token allowance still applies once a card is on file). | `VOYAGE_API_KEY` |
-| Adzuna | developer.adzuna.com, free app id and key (optional; the source is skipped without them) | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` |
+| Adzuna | developer.adzuna.com, free app id and key (optional; off by default, see "Which jobs are imported"; also needs `adzuna` in `JOB_SOURCES`) | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` |
 | Resend | resend.com: add and verify a sending domain (DNS records), then create an API key | `RESEND_API_KEY`, `EMAIL_FROM` |
 | Brevo | app.brevo.com: verify a single sender email (no own domain needed), then create an API key (see "Free tier: Brevo" below). Alternative to Resend. | `BREVO_API_KEY`, `EMAIL_FROM` |
 | Cloudflare Turnstile | Cloudflare dashboard, Turnstile, add a widget for your Vercel domain | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public), `TURNSTILE_SECRET_KEY` |
@@ -56,6 +56,8 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
    | `EMAIL_FROM` | sender verified with the mail provider (Resend: an address on the verified domain; Brevo: the verified single sender) |
    | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` | optional |
    | `ADZUNA_COUNTRIES` | optional, comma-separated, at most 4 (default `es`). The Adzuna API supports at, au, be, br, ca, ch, de, es, fr, gb, in, it, mx, nl, nz, pl, sg, us, za; **not Portugal** (`pt` returns 404 `UNSUPPORTED_COUNTRY`). Each country costs 14 requests per ingest run, so 4 countries use 224 of the free key's 250 requests a day. |
+   | `CANDIDATE_COUNTRY` | optional, the country the candidate lives in (default `Portugal`). Only remote jobs open to this country are imported, see "Which jobs are imported". |
+   | `JOB_SOURCES` | optional, comma-separated sources to ingest (default `himalayas,remotive,jobicy`). Valid: `himalayas`, `remotive`, `jobicy`, `arbeitnow`, `adzuna`. Adzuna is only used when its two keys are also set. |
    | `CRON_SECRET` | `openssl rand -hex 32` (reuse it in GitHub, step 4) |
    | `TURNSTILE_SECRET_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | from step 2 |
    | `TURNSTILE_BYPASS` | `false` (**must not be `true` in production**; it skips the bot check) |
@@ -98,6 +100,23 @@ Setting `EMBEDDINGS_PROVIDER=gemini` embeds with `gemini-embedding-001` through 
   ```
 
   Jobs are re-embedded by the next ingest (`embedMissing`, up to the per-run budget above; matches only show jobs that have a vector, so they reappear as ingest catches up). This includes jobs users added manually: each ingest run also embeds non-expired manual jobs without a vector, after the sources and from what is left of the budget. CVs are re-embedded lazily: the next time a user opens the matches page, `ensureCvEmbedding` sees the missing vector and embeds the stored CV profile (one request). Until then, nothing else is needed.
+
+## Which jobs are imported
+
+The app is for a candidate who works **remotely from `CANDIDATE_COUNTRY`** (default Portugal). Ingest therefore keeps only jobs that are remote **and** open to that country: "Worldwide"/"Anywhere", Europe/EU/EEA/EMEA (when the country is European), a European timezone requirement (CET, EET), or the country itself. Jobs restricted to other countries or regions (USA only, LATAM, APAC, another single country) and jobs with no stated location are skipped. Each stored job carries a short `remoteScope` label ("Worldwide", "Europe", "Portugal", ...) saying where it may be done from.
+
+`JOB_SOURCES` picks the sources (default `himalayas,remotive,jobicy`, all free and keyless; Himalayas and Jobicy are added in later steps of this change):
+
+- **Remotive**: remote jobs only; filtered by its `candidate_required_location` field.
+- **Arbeitnow** and **Adzuna** stay in the code but are **off by default**: they list jobs located in a country (Germany, Spain...), mostly on-site, so almost none are remote jobs you can do from Portugal (Adzuna also has no Portugal). Add them to `JOB_SOURCES` if you want them back (Adzuna also needs its keys).
+
+Jobs imported earlier by a source that is now off stay until they expire (30 days after posting). To remove them now, run this in the Neon SQL editor:
+
+```sql
+DELETE FROM "Job" WHERE source IN ('ARBEITNOW','ADZUNA');
+```
+
+Saved jobs, match results and cover letters that point at those jobs are deleted with them (the foreign keys cascade). Manual jobs are not touched.
 
 ## 4. GitHub Actions secrets
 

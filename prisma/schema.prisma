@@ -18,6 +18,8 @@ enum JobSource {
   ADZUNA
   ARBEITNOW
   REMOTIVE
+  HIMALAYAS
+  JOBICY
   MANUAL
 }
 
@@ -161,6 +163,8 @@ model Job {
   company     String
   location    String?
   remote      Boolean                      @default(false)
+  // Where the candidate may work from ("Worldwide", "Europe", "Portugal"...), for remote jobs.
+  remoteScope String?
   description String
   url         String?
   salaryMin   Int?

@@ -46,6 +46,7 @@ const job = (n: number, over: Partial<NormalizedJob> = {}): NormalizedJob => ({
   company: `Company ${n}`,
   location: "Berlin",
   remote: false,
+  remoteScope: null,
   description: `Build things ${n}`,
   url: `https://example.com/${n}`,
   salaryMin: null,
@@ -268,6 +269,25 @@ describe("runIngest", () => {
       force: true,
     });
     expect((await db.job.findFirstOrThrow()).description).toBe("About\n\n• Remote");
+  });
+
+  it("stores the remote scope and refreshes it when a job is seen again", async () => {
+    await runIngest({
+      adapters: [
+        staticAdapter("REMOTIVE", [job(1, { remote: true, remoteScope: "EMEA" }), job(2)]),
+      ],
+      now: new Date(Date.now() - 2 * DAY),
+    });
+    const scopes = async () =>
+      (await db.job.findMany({ orderBy: { title: "asc" } })).map((j) => j.remoteScope);
+    expect(await scopes()).toEqual(["EMEA", null]);
+    await runIngest({
+      adapters: [
+        staticAdapter("REMOTIVE", [job(1, { remote: true, remoteScope: "Worldwide" }), job(2)]),
+      ],
+      force: true,
+    });
+    expect(await scopes()).toEqual(["Worldwide", null]);
   });
 
   it("dedupes identical jobs within one fetch", async () => {

@@ -14,6 +14,36 @@ const valid = {
 };
 
 describe("parseEnv", () => {
+  describe("CANDIDATE_COUNTRY", () => {
+    it("defaults to Portugal when unset or empty", () => {
+      expect(parseEnv(valid).CANDIDATE_COUNTRY).toBe("Portugal");
+      expect(parseEnv({ ...valid, CANDIDATE_COUNTRY: "" }).CANDIDATE_COUNTRY).toBe("Portugal");
+    });
+
+    it("keeps a configured country, trimmed", () => {
+      expect(parseEnv({ ...valid, CANDIDATE_COUNTRY: " Spain " }).CANDIDATE_COUNTRY).toBe("Spain");
+    });
+  });
+
+  describe("JOB_SOURCES", () => {
+    it("defaults to himalayas, remotive and jobicy when unset or empty", () => {
+      const def = ["himalayas", "remotive", "jobicy"];
+      expect(parseEnv(valid).JOB_SOURCES).toEqual(def);
+      expect(parseEnv({ ...valid, JOB_SOURCES: "" }).JOB_SOURCES).toEqual(def);
+      expect(parseEnv({ ...valid, JOB_SOURCES: " , " }).JOB_SOURCES).toEqual(def);
+    });
+
+    it("parses a comma list, trimming, lowercasing and deduplicating", () => {
+      expect(
+        parseEnv({ ...valid, JOB_SOURCES: "Remotive, arbeitnow,remotive" }).JOB_SOURCES,
+      ).toEqual(["remotive", "arbeitnow"]);
+    });
+
+    it("rejects unknown sources", () => {
+      expect(() => parseEnv({ ...valid, JOB_SOURCES: "remotive,linkedin" })).toThrow(/JOB_SOURCES/);
+    });
+  });
+
   describe("ADZUNA_COUNTRIES", () => {
     it("defaults to Spain when unset or empty", () => {
       expect(parseEnv(valid).ADZUNA_COUNTRIES).toEqual(["es"]);

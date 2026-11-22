@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAdzunaAdapter } from "@/server/jobs/sources/adzuna";
 import { arbeitnowAdapter } from "@/server/jobs/sources/arbeitnow";
 import { SOURCES_CONFIG } from "@/server/jobs/sources/config";
-import { remotiveAdapter } from "@/server/jobs/sources/remotive";
+import { createRemotiveAdapter } from "@/server/jobs/sources/remotive";
 import { computeDedupeHash, getJson, htmlToText, stripHtml } from "@/server/jobs/sources/util";
 
 function fixture(name: string): unknown {
@@ -12,6 +12,8 @@ function fixture(name: string): unknown {
     readFileSync(path.resolve(__dirname, "../fixtures/jobs", `${name}.json`), "utf8"),
   );
 }
+
+const remotiveAdapter = createRemotiveAdapter("Portugal");
 
 function stubFetch(body: unknown) {
   return vi.fn(async (...args: [string | URL | Request]) => (void args, Response.json(body)));
@@ -144,6 +146,7 @@ describe("Adzuna adapter", () => {
       "Join our Lisbon team as a developer building web apps with React & TypeScript. Hybrid work...",
     );
     expect(first.postedAt).toEqual(new Date("2026-11-18T09:30:00Z"));
+    expect(jobs.every((j) => j.remoteScope === null)).toBe(true);
     expect(second.remote).toBe(true);
     expect(second.salaryMin).toBeNull();
     expect(second.currency).toBeNull();
@@ -225,7 +228,7 @@ describe("Remotive adapter", () => {
     expect(String(fetchFn.mock.calls[0][0])).toBe("https://remotive.com/api/remote-jobs?limit=300");
   });
 
-  it("maps fields and strips HTML", async () => {
+  it("keeps only jobs a candidate in Portugal can do, and maps them", async () => {
     const raw = fixture("remotive") as {
       jobs: {
         id: number;
@@ -237,13 +240,15 @@ describe("Remotive adapter", () => {
       }[];
     };
     const jobs = await remotiveAdapter.fetchJobs(asFetch(stubFetch(raw)));
-    expect(jobs).toHaveLength(raw.jobs.length);
-    const src = raw.jobs[0];
+    // fixture locations: USA, USA/Canada (x2), Worldwide, "LATAM, Europe, USA, Canada, APAC"
+    expect(jobs.map((j) => j.externalId)).toEqual(["1680495", "2091137"]);
+    expect(jobs.map((j) => j.remoteScope)).toEqual(["Worldwide", "Europe"]);
+    const src = raw.jobs.find((j) => String(j.id) === jobs[0].externalId)!;
     expect(jobs[0]).toMatchObject({
       source: "REMOTIVE",
       externalId: String(src.id),
       title: src.title,
-      company: src.company_name,
+      company: src.company_name.trim(),
       location: src.candidate_required_location,
       remote: true,
       url: src.url,
@@ -253,6 +258,20 @@ describe("Remotive adapter", () => {
       expect(j.description).not.toMatch(/<[a-z/][^>]*>/i);
       expect(j.description.length).toBeGreaterThan(0);
     }
+  });
+
+  it("filters by the candidate's country", async () => {
+    const raw = fixture("remotive");
+    const usa = await createRemotiveAdapter("United States").fetchJobs(asFetch(stubFetch(raw)));
+    expect(usa).toHaveLength(5);
+    const brazil = await createRemotiveAdapter("Brazil").fetchJobs(asFetch(stubFetch(raw)));
+    expect(brazil.map((j) => j.externalId)).toEqual(["1680495"]);
+  });
+
+  it("keeps every job when no candidate country is given (recorded fixtures)", async () => {
+    const raw = fixture("remotive") as { jobs: unknown[] };
+    const jobs = await createRemotiveAdapter(null).fetchJobs(asFetch(stubFetch(raw)));
+    expect(jobs).toHaveLength(raw.jobs.length);
   });
 
   it("throws an error carrying the status on non-2xx", async () => {
@@ -269,7 +288,7 @@ describe("getEnabledAdapters", () => {
     vi.resetModules();
   });
 
-  async function enabled(adzuna: { id?: string; key?: string }) {
+  async function enabled(vars: Record<string, string> = {}) {
     vi.resetModules();
     vi.stubEnv("DATABASE_URL", "postgresql://x");
     vi.stubEnv("APP_URL", "http://localhost:3000");
@@ -280,19 +299,36 @@ describe("getEnabledAdapters", () => {
     vi.stubEnv("MAIL_PROVIDER", "console");
     vi.stubEnv("EMAIL_FROM", "x@example.com");
     vi.stubEnv("CRON_SECRET", "x");
-    vi.stubEnv("ADZUNA_APP_ID", adzuna.id ?? "");
-    vi.stubEnv("ADZUNA_APP_KEY", adzuna.key ?? "");
+    vi.stubEnv("ADZUNA_APP_ID", "");
+    vi.stubEnv("ADZUNA_APP_KEY", "");
+    vi.stubEnv("JOB_SOURCES", "");
+    for (const [k, v] of Object.entries(vars)) vi.stubEnv(k, v);
     const { getEnabledAdapters } = await import("@/server/jobs/sources");
     return getEnabledAdapters().map((a) => a.source);
   }
 
-  it("omits Adzuna without keys", async () => {
-    expect(await enabled({})).toEqual(["ARBEITNOW", "REMOTIVE"]);
-    expect(await enabled({ id: "only-id" })).toEqual(["ARBEITNOW", "REMOTIVE"]);
+  it("enables only Remotive by default until Himalayas and Jobicy exist", async () => {
+    expect(await enabled()).toEqual(["REMOTIVE"]);
   });
 
-  it("includes Adzuna when both keys are set", async () => {
-    expect(await enabled({ id: "a", key: "b" })).toEqual(["ADZUNA", "ARBEITNOW", "REMOTIVE"]);
+  it("follows JOB_SOURCES, in that order", async () => {
+    expect(await enabled({ JOB_SOURCES: "arbeitnow,remotive" })).toEqual(["ARBEITNOW", "REMOTIVE"]);
+    expect(await enabled({ JOB_SOURCES: "arbeitnow" })).toEqual(["ARBEITNOW"]);
+  });
+
+  it("omits Adzuna without both keys", async () => {
+    expect(await enabled({ JOB_SOURCES: "adzuna" })).toEqual([]);
+    expect(await enabled({ JOB_SOURCES: "adzuna", ADZUNA_APP_ID: "only-id" })).toEqual([]);
+  });
+
+  it("includes Adzuna when it is listed and both keys are set", async () => {
+    expect(
+      await enabled({ JOB_SOURCES: "adzuna,remotive", ADZUNA_APP_ID: "a", ADZUNA_APP_KEY: "b" }),
+    ).toEqual(["ADZUNA", "REMOTIVE"]);
+  });
+
+  it("does not enable Adzuna just because its keys are set", async () => {
+    expect(await enabled({ ADZUNA_APP_ID: "a", ADZUNA_APP_KEY: "b" })).toEqual(["REMOTIVE"]);
   });
 });
 
@@ -302,9 +338,13 @@ describe("malformed data and timeouts", () => {
   it("skips one broken Remotive item and maps the rest", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const raw = fixture("remotive") as { jobs: Record<string, unknown>[] };
-    const broken = { ...raw, jobs: [{ ...raw.jobs[0], title: undefined }, ...raw.jobs.slice(1)] };
+    // job 4 is the "Worldwide" one; one of the two eligible jobs is broken
+    const broken = {
+      ...raw,
+      jobs: raw.jobs.map((j, i) => (i === 3 ? { ...j, title: undefined } : j)),
+    };
     const jobs = await remotiveAdapter.fetchJobs(asFetch(stubFetch(broken)));
-    expect(jobs).toHaveLength(raw.jobs.length - 1);
+    expect(jobs.map((j) => j.externalId)).toEqual(["2091137"]);
     expect(warn).toHaveBeenCalledWith("Remotive: skipped 1 malformed jobs");
   });
 

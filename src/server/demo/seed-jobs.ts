@@ -6,7 +6,7 @@ import { toPgVector } from "@/server/embeddings/vector";
 import { embeddingText } from "@/server/jobs/ingest";
 import { createAdzunaAdapter } from "@/server/jobs/sources/adzuna";
 import { arbeitnowAdapter } from "@/server/jobs/sources/arbeitnow";
-import { remotiveAdapter } from "@/server/jobs/sources/remotive";
+import { createRemotiveAdapter } from "@/server/jobs/sources/remotive";
 import type { NormalizedJob } from "@/server/jobs/sources/types";
 import { computeDedupeHash } from "@/server/jobs/sources/util";
 import { extraSeedJobs } from "./seed-jobs-data";
@@ -33,7 +33,8 @@ export async function buildSeedJobs(): Promise<(NormalizedJob & { dedupeHash: st
   const adapters = [
     createAdzunaAdapter({ appId: "fixture", appKey: "fixture" }),
     arbeitnowAdapter,
-    remotiveAdapter,
+    // null: keep every recorded job, so the demo template's job hashes stay valid.
+    createRemotiveAdapter(null),
   ];
   const fetched = (await Promise.all(adapters.map((a) => a.fetchJobs(fixtureFetch)))).flat();
   const byHash = new Map<string, NormalizedJob & { dedupeHash: string }>();
@@ -61,6 +62,7 @@ export async function seedJobs(client: PrismaClient): Promise<number> {
       company: j.company,
       location: j.location,
       remote: j.remote,
+      remoteScope: j.remoteScope,
       description: j.description,
       url: j.url,
       salaryMin: j.salaryMin,

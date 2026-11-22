@@ -67,6 +67,7 @@ function mapJob(job: z.infer<typeof jobSchema>, country: AdzunaCountry): Normali
     company: job.company?.display_name?.trim() || "Unknown company",
     location: job.location?.display_name?.trim() || null,
     remote: /\bremote\b/i.test(`${title} ${description}`),
+    remoteScope: null,
     description,
     url: job.redirect_url,
     salaryMin: job.salary_min ?? null,

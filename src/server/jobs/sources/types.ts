@@ -7,6 +7,8 @@ export type NormalizedJob = {
   company: string;
   location: string | null;
   remote: boolean;
+  /** Where the candidate may work from ("Worldwide", "Europe", "Portugal"...); null if unknown. */
+  remoteScope: string | null;
   /** Plain text, HTML stripped. */
   description: string;
   url: string;
