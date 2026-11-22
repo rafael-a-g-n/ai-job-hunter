@@ -31,8 +31,11 @@ export const ADAPTER_TIMEOUT_MS = 25_000;
 const JOB_TTL_MS = 30 * 24 * 3600 * 1000;
 const HOUR_MS = 3600 * 1000;
 
-const expiryFor = (postedAt: Date | null, fetchedAt: Date) =>
-  new Date((postedAt ?? fetchedAt).getTime() + JOB_TTL_MS);
+/** 30 days after posting, or the source's own closing date when that comes first. */
+const expiryFor = (j: Pick<NormalizedJob, "postedAt" | "expiresAt">, fetchedAt: Date) => {
+  const ttl = (j.postedAt ?? fetchedAt).getTime() + JOB_TTL_MS;
+  return new Date(Math.min(ttl, j.expiresAt?.getTime() ?? Infinity));
+};
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -117,7 +120,7 @@ async function upsertJobs(jobs: NormalizedJob[], now: Date): Promise<number> {
         ? [
             {
               hash,
-              expiresAt: expiryFor(j.postedAt, now),
+              expiresAt: expiryFor(j, now),
               description: j.description,
               remoteScope: j.remoteScope,
             },
@@ -127,9 +130,7 @@ async function upsertJobs(jobs: NormalizedJob[], now: Date): Promise<number> {
     now,
   );
 
-  const fresh = [...byHash].filter(
-    ([hash, j]) => !existing.has(hash) && expiryFor(j.postedAt, now) > now,
-  );
+  const fresh = [...byHash].filter(([hash, j]) => !existing.has(hash) && expiryFor(j, now) > now);
   if (fresh.length === 0) return 0;
 
   const created = await db.job.createManyAndReturn({
@@ -149,7 +150,7 @@ async function upsertJobs(jobs: NormalizedJob[], now: Date): Promise<number> {
       currency: j.currency,
       postedAt: j.postedAt,
       fetchedAt: now,
-      expiresAt: expiryFor(j.postedAt, now),
+      expiresAt: expiryFor(j, now),
     })),
     skipDuplicates: true,
     select: { id: true },

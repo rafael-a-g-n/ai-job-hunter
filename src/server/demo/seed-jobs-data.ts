@@ -10,7 +10,7 @@ type Extra = Pick<NormalizedJob, "title" | "company" | "location" | "remote"> & 
 
 /**
  * Hand-written sample roles that top up the (small) adapter fixtures, so local dev and e2e have
- * about 30 jobs. Several are React/TypeScript frontend roles in Lisbon, Porto and remote, so the
+ * about 40 jobs. Several are React/TypeScript frontend roles in Lisbon, Porto and remote, so the
  * demo CV has real matches.
  */
 const EXTRA: Extra[] = [
@@ -213,6 +213,56 @@ const EXTRA: Extra[] = [
     stack: "React, TypeScript, Next.js, Shopify APIs, performance",
     about: "Improve conversion and speed of an e-commerce storefront.",
     salary: [34000, 48000],
+  },
+  {
+    title: "Senior Backend Engineer (Python)",
+    company: "Aurora Data",
+    location: "Remote, Europe",
+    scope: "Europe",
+    remote: true,
+    stack: "Python, FastAPI, PostgreSQL, Docker, event-driven design",
+    about: "Build the ingestion APIs of an analytics platform used across the EU.",
+    salary: [55000, 78000],
+  },
+  {
+    title: "Product Manager, Developer Tools",
+    company: "Northwind Remote",
+    location: "Remote, EMEA",
+    scope: "EMEA",
+    remote: true,
+    stack: "roadmapping, user interviews, SQL, written communication",
+    about: "Own the roadmap of a developer platform with customers in Europe and the Middle East.",
+    salary: [60000, 85000],
+  },
+  {
+    title: "Customer Support Engineer",
+    company: "Open Harbour",
+    location: "Remote, Worldwide",
+    scope: "Worldwide",
+    remote: true,
+    stack: "customer support, debugging, REST APIs, English, ticketing tools",
+    about: "Help developers integrate an open source observability product.",
+    salary: [34000, 48000],
+  },
+  {
+    title: "Site Reliability Engineer",
+    company: "Costa Cloud",
+    location: "Remote, Portugal",
+    scope: "Portugal",
+    remote: true,
+    stack: "Linux, Kubernetes, Prometheus, Terraform, incident response",
+    about: "Keep a multi-region SaaS platform fast and available.",
+    salary: [50000, 72000],
+  },
+  {
+    title: "UX Researcher",
+    company: "Praia Labs",
+    location: "Remote, Europe",
+    scope: "Europe",
+    remote: true,
+    stack: "user interviews, usability testing, surveys, synthesis, Figma",
+    about: "Run research that shapes a consumer fintech app across European markets.",
+    salary: [38000, 54000],
   },
 ];
 

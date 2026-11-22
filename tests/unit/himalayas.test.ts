@@ -61,7 +61,7 @@ describe("Himalayas adapter", () => {
       company: "HILLSIDE ASSETS LIMITED",
       remote: true,
       remoteScope: "Worldwide",
-      location: "Worldwide",
+      location: null,
       url: raw.jobs[0].applicationLink,
       salaryMin: 40000,
       salaryMax: 50000,
@@ -82,6 +82,22 @@ describe("Himalayas adapter", () => {
       "Portugal",
       "Europe",
     ]);
+  });
+
+  it("keeps the scope label out of location, so a label change does not change the dedupe hash", async () => {
+    const fetchFn = pagedFetch([raw.jobs]);
+    const jobs = await createHimalayasAdapter("Portugal").fetchJobs(asFetch(fetchFn));
+    for (const j of jobs) expect(j.location).toBeNull();
+  });
+
+  it("carries the source's own expiry date, when it has one", async () => {
+    const withExpiry = { ...raw.jobs[0], guid: "e", expiryDate: 1800000000 };
+    const { expiryDate, ...without } = { ...raw.jobs[0], guid: "n" } as Record<string, unknown>;
+    void expiryDate;
+    const fetchFn = pagedFetch([[withExpiry, without]]);
+    const jobs = await createHimalayasAdapter("Portugal").fetchJobs(asFetch(fetchFn));
+    expect(jobs[0].expiresAt).toEqual(new Date(1800000000 * 1000));
+    expect(jobs[1].expiresAt).toBeNull();
   });
 
   it("keeps salary only for annual periods", async () => {

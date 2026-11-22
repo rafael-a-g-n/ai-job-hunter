@@ -382,6 +382,30 @@ describe("runIngest", () => {
     expect(calls).toBe(2);
   });
 
+  it("caps expiresAt at the source's own closing date when that comes first", async () => {
+    const now = new Date();
+    const closing = new Date(now.getTime() + 5 * DAY);
+    const later = new Date(now.getTime() + 90 * DAY);
+    await runIngest({
+      adapters: [
+        staticAdapter("HIMALAYAS", [
+          job(1, { postedAt: now, expiresAt: closing }),
+          job(2, { postedAt: now, expiresAt: later }),
+          job(3, { postedAt: now }),
+          job(4, { postedAt: now, expiresAt: new Date(now.getTime() - DAY) }),
+        ]),
+      ],
+      now,
+    });
+    const byTitle = async (n: number) =>
+      (await db.job.findFirstOrThrow({ where: { title: `Engineer ${n}` } })).expiresAt.getTime();
+    expect(await byTitle(1)).toBe(closing.getTime());
+    expect(await byTitle(2)).toBe(now.getTime() + 30 * DAY);
+    expect(await byTitle(3)).toBe(now.getTime() + 30 * DAY);
+    // Already closed: not stored at all.
+    expect(await db.job.count({ where: { title: "Engineer 4" } })).toBe(0);
+  });
+
   it("deletes expired non-manual jobs but never manual ones", async () => {
     await db.user.create({ data: { id: "u1", name: "U", email: "u@example.com" } });
     const old = new Date(Date.now() - 31 * DAY);

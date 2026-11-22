@@ -16,6 +16,8 @@ export type NormalizedJob = {
   salaryMax: number | null;
   currency: string | null;
   postedAt: Date | null;
+  /** The source's own closing date, when it gives one; the 30 day rule still caps it. */
+  expiresAt?: Date | null;
 };
 
 export interface JobSourceAdapter {

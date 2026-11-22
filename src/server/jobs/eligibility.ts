@@ -74,7 +74,8 @@ const EUROPE = /\b(europe|european)\b/;
 const EUROPEAN_TIMEZONE = /\b(cet|cest|eet|eest)\b/;
 const AMERICAS =
   /\b(americas|latam|latin america|north america|south america|usa|united states|us|canada|brazil|mexico)\b/;
-const ASIA_PACIFIC = /\b(apac|asia|asia pacific|oceania|australia|india|china|japan)\b/;
+const ASIA_PACIFIC =
+  /\b(apac|asia|asia pacific|oceania|australia|new zealand|india|china|japan|singapore|hong kong|korea|thailand|vietnam|malaysia|philippines)\b/;
 const AFRICA_MIDDLE_EAST = /\b(africa|mena|middle east)\b/;
 // Sub-regions of Europe that do not include a candidate by default: "Eastern Europe" does not
 // mean Portugal. Naming the candidate's own country still makes the job eligible.

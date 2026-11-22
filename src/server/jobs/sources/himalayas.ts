@@ -17,6 +17,7 @@ const jobSchema = z.object({
   salaryPeriod: z.string().nullish(),
   currency: z.string().nullish(),
   pubDate: z.number().optional(),
+  expiryDate: z.number().optional(),
   description: z.string().default(""),
 });
 
@@ -35,7 +36,8 @@ function toNormalized(j: RawJob): NormalizedJob {
     externalId: j.guid,
     title: stripHtml(j.title),
     company: j.companyName.trim(),
-    location: scope,
+    // The scope label is display text: keep it out of `location`, which feeds the dedupe hash.
+    location: null,
     remote: true,
     remoteScope: scope,
     description: htmlToText(j.description),
@@ -45,6 +47,7 @@ function toNormalized(j: RawJob): NormalizedJob {
     salaryMax,
     currency: hasSalary ? j.currency || null : null,
     postedAt: j.pubDate === undefined ? null : parseDate(j.pubDate * 1000),
+    expiresAt: j.expiryDate === undefined ? null : parseDate(j.expiryDate * 1000),
   };
 }
 

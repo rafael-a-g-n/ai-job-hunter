@@ -15,9 +15,9 @@ const nonExpiredWithEmbedding = async () =>
   );
 
 describe("seedJobs", () => {
-  it("creates at least 30 non-expired jobs, all with embeddings", async () => {
+  it("creates at least 36 non-expired jobs, all with embeddings", async () => {
     const count = await seedJobs(db);
-    expect(count).toBeGreaterThanOrEqual(30);
+    expect(count).toBeGreaterThanOrEqual(36);
     expect(await db.job.count()).toBe(count);
     expect(await nonExpiredWithEmbedding()).toBe(count);
   });
