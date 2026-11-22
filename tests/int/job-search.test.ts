@@ -17,6 +17,7 @@ async function makeJob(
     description: string;
     location: string | null;
     remote: boolean;
+    remoteScope: string | null;
     source: JobSource;
     postedAt: Date | null;
     ownerId: string | null;
@@ -68,6 +69,12 @@ describe("searchJobs", () => {
     expect((await searchJobs(A, { location: "porto" })).total).toBe(1);
     expect((await searchJobs(A, { source: "REMOTIVE" })).total).toBe(1);
     expect((await searchJobs(A, {})).total).toBe(2);
+  });
+
+  it("matches the location filter against the remote scope too", async () => {
+    await makeJob({ remote: true, location: null, remoteScope: "Europe", source: "HIMALAYAS" });
+    await makeJob({ remote: true, location: null, remoteScope: "Worldwide", source: "JOBICY" });
+    expect((await searchJobs(A, { location: "europe" })).total).toBe(1);
   });
 
   it("paginates with correct totals and clamps pageSize to 50", async () => {

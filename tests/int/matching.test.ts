@@ -32,7 +32,10 @@ const OTHER = [
   "Electrician",
 ];
 
-async function makeJob(title: string, over: { ownerId?: string; remote?: boolean } = {}) {
+async function makeJob(
+  title: string,
+  over: { ownerId?: string; remote?: boolean; remoteScope?: string } = {},
+) {
   const description =
     FRONTEND.includes(title) || over.ownerId
       ? `${title} role: build the web app with React, TypeScript and CSS, with git and teamwork.`
@@ -45,6 +48,7 @@ async function makeJob(title: string, over: { ownerId?: string; remote?: boolean
       company: "Acme",
       description,
       remote: over.remote ?? false,
+      remoteScope: over.remoteScope ?? null,
       ownerId: over.ownerId ?? null,
       expiresAt: new Date(Date.now() + 30 * DAY),
     },
@@ -264,6 +268,14 @@ describe("findMatches", () => {
     await makeJob("Remote Frontend Developer", { remote: true });
     await analysedCv();
     const { matches } = await findMatches(A, false, { filters: { remote: true } }, noAi);
+    expect(matches.map((m) => m.job.title)).toEqual(["Remote Frontend Developer"]);
+  });
+
+  it("applies the location filter to the remote scope as well", async () => {
+    await seedAll();
+    await makeJob("Remote Frontend Developer", { remote: true, remoteScope: "Europe" });
+    await analysedCv();
+    const { matches } = await findMatches(A, false, { filters: { location: "europe" } }, noAi);
     expect(matches.map((m) => m.job.title)).toEqual(["Remote Frontend Developer"]);
   });
 

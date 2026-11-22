@@ -81,7 +81,8 @@ async function recall(
   if (filters?.remote) extra.push(Prisma.sql`AND j."remote" = true`);
   const location = filters?.location?.trim();
   if (location) {
-    extra.push(Prisma.sql`AND j."location" ILIKE ${`%${escapeLike(location)}%`}`);
+    const pattern = `%${escapeLike(location)}%`;
+    extra.push(Prisma.sql`AND (j."location" ILIKE ${pattern} OR j."remoteScope" ILIKE ${pattern})`);
   }
   return db.$queryRaw<RecallRow[]>`
     SELECT j."id", j."title", j."company", j."location", j."remote", j."remoteScope",

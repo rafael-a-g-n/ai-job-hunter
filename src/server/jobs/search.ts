@@ -74,7 +74,15 @@ export async function searchJobs(
       ],
     });
   }
-  if (location) and.push({ location: { contains: location, mode: "insensitive" } });
+  // Himalayas and Jobicy jobs keep where they can be done from in remoteScope, not location.
+  if (location) {
+    and.push({
+      OR: [
+        { location: { contains: location, mode: "insensitive" } },
+        { remoteScope: { contains: location, mode: "insensitive" } },
+      ],
+    });
+  }
   if (q.remote) and.push({ remote: true });
   if (q.source) and.push({ source: q.source });
   const where: Prisma.JobWhereInput = { AND: and };
