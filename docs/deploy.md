@@ -105,8 +105,9 @@ Setting `EMBEDDINGS_PROVIDER=gemini` embeds with `gemini-embedding-001` through 
 
 The app is for a candidate who works **remotely from `CANDIDATE_COUNTRY`** (default Portugal). Ingest therefore keeps only jobs that are remote **and** open to that country: "Worldwide"/"Anywhere", Europe/EU/EEA/EMEA (when the country is European), a European timezone requirement (CET, EET), or the country itself. Jobs restricted to other countries or regions (USA only, LATAM, APAC, another single country) and jobs with no stated location are skipped. Each stored job carries a short `remoteScope` label ("Worldwide", "Europe", "Portugal", ...) saying where it may be done from.
 
-`JOB_SOURCES` picks the sources (default `himalayas,remotive,jobicy`, all free and keyless; Himalayas and Jobicy are added in later steps of this change):
+`JOB_SOURCES` picks the sources (default `himalayas,remotive,jobicy`, all free and keyless; Jobicy is added in a later step of this change):
 
+- **Himalayas** (himalayas.app, the main source): queried with `country=<CANDIDATE_COUNTRY>`, so it only returns jobs open to that country; the list of allowed countries becomes the `remoteScope` label (empty list = Worldwide, a full European list = Europe, plus Africa and the Middle East = EMEA). Ten pages of 20 jobs (at most 200) per run, one request at a time, no API key (a free key only raises the rate limits). Annual salaries are imported, hourly/monthly ones are not. Himalayas' terms require that apply links use the `applicationLink` they supply and that the site credits Himalayas with a visible link, so the job page links "Jobs from Himalayas" to himalayas.app.
 - **Remotive**: remote jobs only; filtered by its `candidate_required_location` field.
 - **Arbeitnow** and **Adzuna** stay in the code but are **off by default**: they list jobs located in a country (Germany, Spain...), mostly on-site, so almost none are remote jobs you can do from Portugal (Adzuna also has no Portugal). Add them to `JOB_SOURCES` if you want them back (Adzuna also needs its keys).
 

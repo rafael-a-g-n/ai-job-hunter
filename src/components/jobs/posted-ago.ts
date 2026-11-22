@@ -13,6 +13,7 @@ const SOURCE_LABELS: Record<string, string> = {
   ADZUNA: "Adzuna",
   ARBEITNOW: "Arbeitnow",
   REMOTIVE: "Remotive",
+  HIMALAYAS: "Himalayas",
   MANUAL: "Pasted by you",
 };
 

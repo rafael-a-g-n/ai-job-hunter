@@ -138,3 +138,43 @@ export function scopeLabel(text: string): string {
   if (countries.length === 1) return countries[0];
   return text.trim().slice(0, MAX_LABEL).trim();
 }
+
+/** Island territories that sit in a "Europe" list without changing what it means. */
+const EUROPEAN_TERRITORIES = [
+  "Faroe Islands",
+  "Gibraltar",
+  "Guernsey",
+  "Holy See (Vatican City State)",
+  "Isle of Man",
+  "Jersey",
+  "Svalbard and Jan Mayen",
+  "Åland Islands",
+];
+const AMERICAS_MARKERS = ["United States", "Canada", "Brazil", "Mexico"];
+const AFRICA_MARKERS = ["Nigeria", "South Africa", "Egypt", "Kenya", "Morocco"];
+const MAX_LISTED_COUNTRIES = 3;
+// A list counts as "all of Europe" when it covers this share of EUROPE_COUNTRIES.
+const EUROPE_COVERAGE = 0.65;
+
+/**
+ * Display label for a structured country list (Himalayas' locationRestrictions; empty means
+ * worldwide): "Worldwide", "Europe", "EMEA", "Europe & Americas", "Europe & more", the
+ * country names for a short list, or "Several countries".
+ */
+export function scopeFromCountries(countries: readonly string[]): string {
+  if (countries.length === 0) return "Worldwide";
+  const names = new Set(countries.map(normalize));
+  const has = (c: string) => names.has(normalize(c));
+  const covered = EUROPE_COUNTRIES.filter(has).length;
+  if (covered / EUROPE_COUNTRIES.length >= EUROPE_COVERAGE) {
+    const others = countries.filter(
+      (c) => !isIn(EUROPE_COUNTRIES, c) && !isIn(EUROPEAN_TERRITORIES, c),
+    );
+    if (others.length === 0) return "Europe";
+    if (AMERICAS_MARKERS.some(has)) return "Europe & Americas";
+    if (AFRICA_MARKERS.some(has)) return "EMEA";
+    return "Europe & more";
+  }
+  if (countries.length <= MAX_LISTED_COUNTRIES) return countries.join(", ");
+  return "Several countries";
+}

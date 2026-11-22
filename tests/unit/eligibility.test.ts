@@ -4,6 +4,7 @@ import {
   EU_COUNTRIES,
   EUROPE_COUNTRIES,
   isEligibleLocation,
+  scopeFromCountries,
   scopeLabel,
 } from "@/server/jobs/eligibility";
 
@@ -123,5 +124,46 @@ describe("scopeLabel", () => {
     expect(scopeLabel("  Somewhere nice  ")).toBe("Somewhere nice");
     const out = scopeLabel("x".repeat(60));
     expect(out).toHaveLength(40);
+  });
+});
+
+describe("scopeFromCountries (Himalayas locationRestrictions)", () => {
+  const europe = [...EUROPE_COUNTRIES].filter((c) => c !== "Kosovo");
+
+  it("labels an empty list Worldwide", () => {
+    expect(scopeFromCountries([])).toBe("Worldwide");
+  });
+
+  it("labels the candidate's country alone with its name", () => {
+    expect(scopeFromCountries(["Portugal"])).toBe("Portugal");
+  });
+
+  it("joins a small list of countries", () => {
+    expect(scopeFromCountries(["Poland", "Portugal", "Romania"])).toBe("Poland, Portugal, Romania");
+  });
+
+  it("labels Europe, ignoring island territories", () => {
+    const territories = ["Faroe Islands", "Gibraltar", "Guernsey", "Isle of Man", "Jersey"];
+    expect(scopeFromCountries(europe)).toBe("Europe");
+    expect(scopeFromCountries([...europe, ...territories])).toBe("Europe");
+  });
+
+  it("labels Europe plus a few countries elsewhere", () => {
+    expect(scopeFromCountries([...europe, "India", "Japan"])).toBe("Europe & more");
+  });
+
+  it("labels Europe plus the Americas", () => {
+    expect(scopeFromCountries([...europe, "United States", "Canada"])).toBe("Europe & Americas");
+  });
+
+  it("labels Europe, Africa and the Middle East EMEA", () => {
+    const emea = [...europe, "Nigeria", "South Africa", "Egypt", "Israel", "Saudi Arabia"];
+    expect(scopeFromCountries(emea)).toBe("EMEA");
+  });
+
+  it("falls back to a short generic label for a long mixed list", () => {
+    const label = scopeFromCountries(["Portugal", "Brazil", "Japan", "Chile", "Peru"]);
+    expect(label).toBe("Several countries");
+    expect(label.length).toBeLessThanOrEqual(40);
   });
 });

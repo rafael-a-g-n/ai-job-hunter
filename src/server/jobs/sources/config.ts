@@ -6,5 +6,7 @@ export const SOURCES_CONFIG = {
     pages: 2,
   },
   arbeitnow: { pages: 3 },
+  // 20 jobs per page; 10 pages is at most 200 jobs per run, fetched one page at a time.
+  himalayas: { pages: 10 },
   remotive: { limit: 300 },
 } as const;

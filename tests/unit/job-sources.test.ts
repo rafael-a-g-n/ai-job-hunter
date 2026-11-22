@@ -307,8 +307,8 @@ describe("getEnabledAdapters", () => {
     return getEnabledAdapters().map((a) => a.source);
   }
 
-  it("enables only Remotive by default until Himalayas and Jobicy exist", async () => {
-    expect(await enabled()).toEqual(["REMOTIVE"]);
+  it("enables Himalayas and Remotive by default until Jobicy exists", async () => {
+    expect(await enabled()).toEqual(["HIMALAYAS", "REMOTIVE"]);
   });
 
   it("follows JOB_SOURCES, in that order", async () => {
@@ -328,7 +328,10 @@ describe("getEnabledAdapters", () => {
   });
 
   it("does not enable Adzuna just because its keys are set", async () => {
-    expect(await enabled({ ADZUNA_APP_ID: "a", ADZUNA_APP_KEY: "b" })).toEqual(["REMOTIVE"]);
+    expect(await enabled({ ADZUNA_APP_ID: "a", ADZUNA_APP_KEY: "b" })).toEqual([
+      "HIMALAYAS",
+      "REMOTIVE",
+    ]);
   });
 });
 

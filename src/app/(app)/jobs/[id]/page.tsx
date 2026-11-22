@@ -68,6 +68,18 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
             View the original posting
           </a>
         )}
+        {job.source === "HIMALAYAS" && (
+          <p className="text-xs text-muted-foreground">
+            <a
+              href="https://himalayas.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-4"
+            >
+              Jobs from Himalayas
+            </a>
+          </p>
+        )}
       </div>
 
       {match && match.score !== null && (
