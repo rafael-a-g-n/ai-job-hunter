@@ -8,7 +8,7 @@ Domain terms as the code and UI use them.
 
 **Analysis**: The AI review of a CV: a 0 to 100 score and notes on structure, impact and keywords. A CV is `ANALYZED` when this succeeds and `FAILED` when it does not.
 
-**Job**: A posting stored in our database, either ingested from a source (Adzuna, Arbeitnow, Remotive) or a Manual job. Ingested jobs are embedded once and expire 30 days after `postedAt` (or `fetchedAt`).
+**Job**: A posting stored in our database, either ingested from a source (Himalayas, Remotive, Jobicy; Arbeitnow and Adzuna are optional) or a Manual job. Ingested jobs are embedded once and expire 30 days after `postedAt` (or `fetchedAt`).
 
 **Manual job**: A job the user pasted as text. The AI normalizes it into a Job owned by that user. It is visible only to its owner and expires 365 days after it was added.
 

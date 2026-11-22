@@ -8,6 +8,7 @@ export type JobListItem = {
   company: string;
   location: string | null;
   remote: boolean;
+  remoteScope: string | null;
   source: JobSource;
   postedAt: Date | null;
   url: string | null;
@@ -47,6 +48,7 @@ export const jobListSelect = {
   company: true,
   location: true,
   remote: true,
+  remoteScope: true,
   source: true,
   postedAt: true,
   url: true,

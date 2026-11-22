@@ -5,7 +5,7 @@ const STEPS = [
   },
   {
     title: "Match",
-    text: "Jobs from public sources and ones you paste in are ranked against your profile, with the reasons shown.",
+    text: "Remote jobs open to candidates in Europe (Himalayas, Remotive, Jobicy) and ones you paste in are ranked against your profile, with the reasons shown.",
   },
   {
     title: "Apply",

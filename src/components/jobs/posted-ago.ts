@@ -9,6 +9,15 @@ export function postedAgo(postedAt: Date | null, now: Date): string {
   return `Posted ${Math.floor(days / 30)} months ago`;
 }
 
+/** "Remote · Europe" for a remote job with a scope, "Remote" without one, null when not remote. */
+export function remoteBadgeText(job: {
+  remote: boolean;
+  remoteScope: string | null;
+}): string | null {
+  if (!job.remote) return null;
+  return job.remoteScope ? `Remote · ${job.remoteScope}` : "Remote";
+}
+
 const SOURCE_LABELS: Record<string, string> = {
   ADZUNA: "Adzuna",
   ARBEITNOW: "Arbeitnow",

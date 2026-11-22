@@ -6,15 +6,15 @@ Upload a CV, get it analysed, find real jobs that fit it, and generate a cover l
 
 **Live demo:** TBD (one click, no sign-up; see [docs/deploy.md](docs/deploy.md) to host your own).
 
-| Light | Dark |
-|---|---|
+| Light                                                              | Dark                                                             |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------- |
 | ![Landing page, light](docs/screenshots/landing-desktop-light.png) | ![Landing page, dark](docs/screenshots/landing-desktop-dark.png) |
-| ![Dashboard, light](docs/screenshots/dashboard-desktop-light.png) | ![Dashboard, dark](docs/screenshots/dashboard-desktop-dark.png) |
+| ![Dashboard, light](docs/screenshots/dashboard-desktop-light.png)  | ![Dashboard, dark](docs/screenshots/dashboard-desktop-dark.png)  |
 
 ## Features
 
 - **CV analysis:** upload a PDF or DOCX (max 4 MB, which keeps the request under Vercel's 4.5 MB body limit). You get a 0 to 100 score with notes on structure, impact and keywords, and an editable structured profile. Scanned or empty files are rejected before any AI call.
-- **Job matching:** semantic search over jobs ingested from Adzuna, Arbeitnow and Remotive, then an AI pass that explains each match and lists matched skills and gaps.
+- **Job matching:** semantic search over remote jobs open to candidates in Europe (Himalayas, Remotive, Jobicy; each job shows where you may work from), then an AI pass that explains each match and lists matched skills and gaps.
 - **Manual jobs:** paste a posting as text; the AI normalizes it into a private job you can match against.
 - **Cover letters:** streamed, editable, in English or Portuguese, with a choice of tone and length. The prompt restricts the letter to facts in your profile.
 - **Accounts and demo:** email and password with verification, password reset, account and data deletion. A demo account is one click away, pre-filled with a CV, matches and a letter.
@@ -34,7 +34,7 @@ flowchart LR
   App --> Resend["Resend or Brevo<br/>email"]
   App --> TS[Cloudflare Turnstile]
   GHA["GitHub Actions<br/>every 6 h"] -->|"POST /api/cron/ingest"| App
-  App -->|ingest| Sources["Adzuna, Arbeitnow, Remotive"]
+  App -->|ingest| Sources["Himalayas, Remotive, Jobicy<br/>remote jobs open to Europe"]
 ```
 
 ## Stack
@@ -43,7 +43,7 @@ Next.js 16 (App Router, `cacheComponents`), React 19, TypeScript (strict), Tailw
 
 ## How it works
 
-1. **Ingest.** Every 6 hours a GitHub Actions workflow calls `POST /api/cron/ingest`. Each source is fetched with a 25 s deadline (Remotive at most once per 24 h). Jobs are deduplicated by a hash of title, company and location, embedded once, and expire 30 days after posting. A failing source is reported and skipped; the others still run. See [ADR 2](docs/adr/0002-ingest-not-live-search.md).
+1. **Ingest.** Every 6 hours a GitHub Actions workflow calls `POST /api/cron/ingest`. Each enabled source (`JOB_SOURCES`) is fetched with a 25 s deadline and only jobs that are remote and open to `CANDIDATE_COUNTRY` are kept (Remotive at most once per 24 h). Jobs are deduplicated by a hash of title, company and location, embedded once, and expire 30 days after posting. A failing source is reported and skipped; the others still run. See [ADR 2](docs/adr/0002-ingest-not-live-search.md).
 2. **Embeddings.** Each job and each analysed CV profile is embedded into a 1024-dimension vector stored in a pgvector column (HNSW index, cosine distance).
 3. **Recall.** Matching takes the 50 jobs nearest to the CV vector, restricted to non-expired jobs that are public or owned by the user.
 4. **Re-rank.** One AI call scores the top 10 recalled jobs that were never sent to the re-rank for this CV, returning a score, matched skills, gaps and an explanation. Results are cached per CV and job (a job the answer leaves out is recorded as attempted), so repeat visits cost nothing. If the daily limit is already reached, no unit is consumed and vector order is shown, with a note saying so. If the call fails, the consumed unit is refunded, vector order is shown, and that CV's re-rank pauses for 10 minutes.
@@ -98,12 +98,12 @@ Domain vocabulary is in [GLOSSARY.md](GLOSSARY.md). The original design spec is 
 
 Daily limits count per UTC day and are enforced by one atomic SQL statement, so parallel requests cannot exceed them.
 
-| Action | Regular user | Demo user |
-|---|---|---|
-| CV analysis | 3 | 1 |
-| Cover letter | 10 | 2 |
-| Match re-rank | 10 | 3 |
-| Manual job normalize | 10 | 2 |
+| Action               | Regular user | Demo user |
+| -------------------- | ------------ | --------- |
+| CV analysis          | 3            | 1         |
+| Cover letter         | 10           | 2         |
+| Match re-rank        | 10           | 3         |
+| Manual job normalize | 10           | 2         |
 
 - A global cap, `GLOBAL_DAILY_AI_BUDGET_USD` (default 5), stops all AI calls for the day once the recorded spend reaches it. Every call's token cost is stored in `AiCall`.
 - Demo accounts expire after 24 h, with at most 3 per IP hash per day.

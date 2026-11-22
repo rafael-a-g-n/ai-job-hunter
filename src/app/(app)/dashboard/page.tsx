@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { UsageSummary } from "@/components/app/usage-summary";
+import { remoteBadgeText } from "@/components/jobs/posted-ago";
 import { ScoreBadge } from "@/components/matching/score-badge";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -76,7 +77,10 @@ async function DashboardContent() {
                     className="grid underline-offset-4 hover:underline"
                   >
                     <span className="font-medium">{m.job.title}</span>
-                    <span className="text-muted-foreground">{m.job.company}</span>
+                    <span className="text-muted-foreground">
+                      {m.job.company}
+                      {remoteBadgeText(m.job) ? ` · ${remoteBadgeText(m.job)}` : ""}
+                    </span>
                   </Link>
                   {m.score !== null && <ScoreBadge score={m.score} />}
                 </li>

@@ -4,10 +4,18 @@ import { JobCard } from "@/components/jobs/job-card";
 import { JOB_SOURCES, JobFilters } from "@/components/jobs/job-filters";
 import { Pagination } from "@/components/jobs/pagination";
 import { EmptyState } from "@/components/app/empty-state";
+import { env } from "@/lib/env";
 import { requireUser } from "@/server/auth/session";
 import { savedJobIds } from "@/server/jobs/saved";
 import { searchJobs } from "@/server/jobs/search";
 import { PageSkeleton } from "@/components/app/page-skeleton";
+
+/** Sources of the dropdown: those in JOB_SOURCES, the user's own pasted jobs, and the current pick. */
+function filterSources(selected: string | undefined): string[] {
+  const list = [...env.JOB_SOURCES.map((s) => s.toUpperCase()), "MANUAL"];
+  if (selected && !list.includes(selected)) list.push(selected);
+  return list;
+}
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -45,7 +53,13 @@ async function Results({ searchParams }: { searchParams: Promise<Params> }) {
 
   return (
     <>
-      <JobFilters q={q} location={location} remote={remote} source={source ?? ""} />
+      <JobFilters
+        q={q}
+        location={location}
+        remote={remote}
+        source={source ?? ""}
+        sources={filterSources(source)}
+      />
       <p className="text-sm text-muted-foreground">
         {result.total} {result.total === 1 ? "job" : "jobs"} found
       </p>

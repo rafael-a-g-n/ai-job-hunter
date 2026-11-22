@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { SourceCredit } from "@/components/jobs/source-credit";
-import { postedAgo, sourceLabel } from "@/components/jobs/posted-ago";
+import { postedAgo, remoteBadgeText, sourceLabel } from "@/components/jobs/posted-ago";
 import { DeleteJobButton } from "@/components/jobs/delete-job-button";
 import { JobDescription } from "@/components/jobs/job-description";
 import { SaveButton } from "@/components/jobs/save-button";
@@ -49,7 +49,7 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
               {job.location ? ` - ${job.location}` : ""}
             </p>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {job.remote && <Badge>Remote</Badge>}
+              {remoteBadgeText(job) && <Badge>{remoteBadgeText(job)}</Badge>}
               <Badge variant="outline">{sourceLabel(job.source)}</Badge>
               <span>{postedAgo(job.postedAt, now)}</span>
             </div>

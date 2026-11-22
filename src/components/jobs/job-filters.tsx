@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { sourceLabel } from "./posted-ago";
 
 export const JOB_SOURCES = [
   "HIMALAYAS",
@@ -17,11 +18,14 @@ export function JobFilters({
   location,
   remote,
   source,
+  sources,
 }: {
   q: string;
   location: string;
   remote: boolean;
   source: string;
+  /** Source values to offer: the enabled ones (plus the selected one, if it was switched off). */
+  sources: readonly string[];
 }) {
   return (
     <form action="/jobs" method="get" className="flex flex-wrap items-end gap-3">
@@ -42,12 +46,11 @@ export function JobFilters({
           className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
         >
           <option value="">All sources</option>
-          <option value="HIMALAYAS">Himalayas</option>
-          <option value="REMOTIVE">Remotive</option>
-          <option value="JOBICY">Jobicy</option>
-          <option value="ARBEITNOW">Arbeitnow</option>
-          <option value="ADZUNA">Adzuna</option>
-          <option value="MANUAL">Pasted by you</option>
+          {sources.map((s) => (
+            <option key={s} value={s}>
+              {sourceLabel(s)}
+            </option>
+          ))}
         </select>
       </div>
       <label className="flex h-8 items-center gap-2 text-sm">

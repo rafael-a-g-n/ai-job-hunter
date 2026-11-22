@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { postedAgo, sourceLabel } from "@/components/jobs/posted-ago";
+import { postedAgo, remoteBadgeText, sourceLabel } from "@/components/jobs/posted-ago";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { MatchView } from "@/server/matching/match";
@@ -24,7 +24,7 @@ export function MatchCard({ match, now }: { match: MatchView; now: Date }) {
               {job.location ? ` - ${job.location}` : ""}
             </p>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {job.remote && <Badge>Remote</Badge>}
+              {remoteBadgeText(job) && <Badge>{remoteBadgeText(job)}</Badge>}
               <Badge variant="outline">{sourceLabel(job.source)}</Badge>
               <span>{postedAgo(job.postedAt, now)}</span>
             </div>

@@ -113,13 +113,13 @@
     "blob": "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"
   },
   "savedJobDedupeHashes": [
-    "1869c9ce8bd394a4d95b80fc3963378e52b874298bca8fc8d341cc6dd2c17cf3",
+    "e2fc3516b0809fdf1495cf96126edd0eab434a45ed67dffa122f30d58b1510d6",
     "526c9cd74b83e65534d451c27fe46d25fef559921c38ddf5590e0f9faab43f05",
     "53a62388b03a5f08ce4d71fd827e88269c515bc68c8a5a63e42f3ce8c13357a9"
   ],
   "matches": [
     {
-      "jobDedupeHash": "1869c9ce8bd394a4d95b80fc3963378e52b874298bca8fc8d341cc6dd2c17cf3",
+      "jobDedupeHash": "e2fc3516b0809fdf1495cf96126edd0eab434a45ed67dffa122f30d58b1510d6",
       "score": 88,
       "matchedSkills": ["React", "TypeScript"],
       "gaps": ["GraphQL"],
@@ -140,21 +140,21 @@
       "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
     },
     {
-      "jobDedupeHash": "e2fc3516b0809fdf1495cf96126edd0eab434a45ed67dffa122f30d58b1510d6",
+      "jobDedupeHash": "fae9ecf8f50c9bde74116ed9d9d206147539f5bc3c3340355d33c5f1f1695f8f",
       "score": 70,
       "matchedSkills": ["React", "TypeScript"],
       "gaps": ["GraphQL"],
       "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
     },
     {
-      "jobDedupeHash": "fae9ecf8f50c9bde74116ed9d9d206147539f5bc3c3340355d33c5f1f1695f8f",
+      "jobDedupeHash": "c065e739e728c3f7d8dd64dc04e0b7b99da3a648894a76baba046f3bb35646cf",
       "score": 64,
       "matchedSkills": ["React", "TypeScript"],
       "gaps": ["GraphQL"],
       "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
     },
     {
-      "jobDedupeHash": "c065e739e728c3f7d8dd64dc04e0b7b99da3a648894a76baba046f3bb35646cf",
+      "jobDedupeHash": "34a21ff4ddba0f009818ef967f0386029b280fb70c0588962a7db8b0ddc6c05a",
       "score": 58,
       "matchedSkills": ["React", "TypeScript"],
       "gaps": ["GraphQL"],
@@ -182,7 +182,7 @@
       "explanation": "Strong overlap with the required frontend stack; GraphQL experience is missing."
     },
     {
-      "jobDedupeHash": "733d5eabf9795ba707062f50c3f64b9819fa815080b0b8069fdd21641a83beed",
+      "jobDedupeHash": "c59b089d83a2be212c5a075f7e55cc807d05e88d3568cd393a1dc4ce27365546",
       "score": 34,
       "matchedSkills": ["React", "TypeScript"],
       "gaps": ["GraphQL"],
@@ -190,7 +190,7 @@
     }
   ],
   "letter": {
-    "jobDedupeHash": "1869c9ce8bd394a4d95b80fc3963378e52b874298bca8fc8d341cc6dd2c17cf3",
+    "jobDedupeHash": "e2fc3516b0809fdf1495cf96126edd0eab434a45ed67dffa122f30d58b1510d6",
     "tone": "NEUTRAL",
     "language": "en",
     "length": "MEDIUM",

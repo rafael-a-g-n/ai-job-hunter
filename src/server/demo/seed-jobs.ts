@@ -4,13 +4,14 @@ import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { getEmbedder } from "@/server/embeddings/embedder";
 import { toPgVector } from "@/server/embeddings/vector";
 import { embeddingText } from "@/server/jobs/ingest";
-import { createAdzunaAdapter } from "@/server/jobs/sources/adzuna";
-import { arbeitnowAdapter } from "@/server/jobs/sources/arbeitnow";
+import { createHimalayasAdapter } from "@/server/jobs/sources/himalayas";
+import { createJobicyAdapter } from "@/server/jobs/sources/jobicy";
 import { createRemotiveAdapter } from "@/server/jobs/sources/remotive";
 import type { NormalizedJob } from "@/server/jobs/sources/types";
 import { computeDedupeHash } from "@/server/jobs/sources/util";
 import { extraSeedJobs } from "./seed-jobs-data";
 
+const SEED_COUNTRY = "Portugal";
 const SEED_TTL_MS = 30 * 24 * 3600 * 1000;
 const EMBED_CHUNK = 100;
 const FIXTURE_DIR = path.resolve(process.cwd(), "tests/fixtures/jobs");
@@ -18,10 +19,10 @@ const FIXTURE_DIR = path.resolve(process.cwd(), "tests/fixtures/jobs");
 /** Serves the recorded API responses, so the real adapters' mapping code runs without a network. */
 const fixtureFetch: typeof fetch = async (input) => {
   const url = String(input instanceof Request ? input.url : input);
-  const name = url.includes("adzuna")
-    ? "adzuna"
-    : url.includes("arbeitnow")
-      ? "arbeitnow"
+  const name = url.includes("himalayas")
+    ? "himalayas"
+    : url.includes("jobicy")
+      ? "jobicy"
       : "remotive";
   return new Response(readFileSync(path.join(FIXTURE_DIR, `${name}.json`), "utf8"), {
     headers: { "Content-Type": "application/json" },
@@ -30,11 +31,11 @@ const fixtureFetch: typeof fetch = async (input) => {
 
 /** The seed set: the normalised adapter fixtures plus hand-written extras, deduped by hash. */
 export async function buildSeedJobs(): Promise<(NormalizedJob & { dedupeHash: string })[]> {
+  // One page each is enough for the recorded fixtures; the seed is for a candidate in Portugal.
   const adapters = [
-    createAdzunaAdapter({ appId: "fixture", appKey: "fixture" }),
-    arbeitnowAdapter,
-    // null: keep every recorded job, so the demo template's job hashes stay valid.
-    createRemotiveAdapter(null),
+    createHimalayasAdapter(SEED_COUNTRY, 1),
+    createRemotiveAdapter(SEED_COUNTRY),
+    createJobicyAdapter(SEED_COUNTRY, 1, 0),
   ];
   const fetched = (await Promise.all(adapters.map((a) => a.fetchJobs(fixtureFetch)))).flat();
   const byHash = new Map<string, NormalizedJob & { dedupeHash: string }>();

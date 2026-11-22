@@ -43,6 +43,7 @@ type RecallRow = {
   company: string;
   location: string | null;
   remote: boolean;
+  remoteScope: string | null;
   source: JobSource;
   postedAt: Date | null;
   url: string | null;
@@ -83,7 +84,8 @@ async function recall(
     extra.push(Prisma.sql`AND j."location" ILIKE ${`%${escapeLike(location)}%`}`);
   }
   return db.$queryRaw<RecallRow[]>`
-    SELECT j."id", j."title", j."company", j."location", j."remote", j."source"::text AS "source",
+    SELECT j."id", j."title", j."company", j."location", j."remote", j."remoteScope",
+           j."source"::text AS "source",
            j."postedAt", j."url", left(j."description", ${DESCRIPTION_CHARS}::int) AS "snippet",
            (1 - (j."embedding" <=> c."embedding"))::float8 AS "sim"
     FROM "Job" j, (SELECT "embedding" FROM "Cv" WHERE "id" = ${cvId} AND "userId" = ${userId}) c
@@ -102,6 +104,7 @@ function toView(row: RecallRow, cached: Cached | undefined): MatchView {
       company: row.company,
       location: row.location,
       remote: row.remote,
+      remoteScope: row.remoteScope,
       source: row.source,
       postedAt: row.postedAt,
       url: row.url,
