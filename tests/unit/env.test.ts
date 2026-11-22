@@ -18,6 +18,18 @@ describe("parseEnv", () => {
     expect(() => parseEnv({ ...valid, AI_PROVIDER: "anthropic" })).toThrow(/ANTHROPIC_API_KEY/);
   });
 
+  it("requires GOOGLE_GENERATIVE_AI_API_KEY when AI_PROVIDER is google", () => {
+    expect(() => parseEnv({ ...valid, AI_PROVIDER: "google" })).toThrow(
+      /GOOGLE_GENERATIVE_AI_API_KEY/,
+    );
+    expect(() =>
+      parseEnv({ ...valid, AI_PROVIDER: "google", GOOGLE_GENERATIVE_AI_API_KEY: "" }),
+    ).toThrow(/GOOGLE_GENERATIVE_AI_API_KEY/);
+    expect(() =>
+      parseEnv({ ...valid, AI_PROVIDER: "google", GOOGLE_GENERATIVE_AI_API_KEY: "k" }),
+    ).not.toThrow();
+  });
+
   it("passes with the mock AI provider and no key", () => {
     expect(() => parseEnv({ ...valid, AI_PROVIDER: "mock" })).not.toThrow();
   });

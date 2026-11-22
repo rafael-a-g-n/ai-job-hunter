@@ -13,8 +13,9 @@ const schema = z
     DATABASE_URL: z.string().min(1),
     APP_URL: z.string().url(),
     BETTER_AUTH_SECRET: z.string().min(32),
-    AI_PROVIDER: z.enum(["anthropic", "mock"]),
+    AI_PROVIDER: z.enum(["anthropic", "google", "mock"]),
     ANTHROPIC_API_KEY: optionalStr,
+    GOOGLE_GENERATIVE_AI_API_KEY: optionalStr,
     EMBEDDINGS_PROVIDER: z.enum(["voyage", "fake"]),
     VOYAGE_API_KEY: optionalStr,
     STORAGE_PROVIDER: z.enum(["vercel-blob", "local"]),
@@ -33,6 +34,7 @@ const schema = z
   .superRefine((e, ctx) => {
     const required: [boolean, keyof typeof e][] = [
       [e.AI_PROVIDER === "anthropic", "ANTHROPIC_API_KEY"],
+      [e.AI_PROVIDER === "google", "GOOGLE_GENERATIVE_AI_API_KEY"],
       [e.EMBEDDINGS_PROVIDER === "voyage", "VOYAGE_API_KEY"],
       [e.STORAGE_PROVIDER === "vercel-blob", "BLOB_READ_WRITE_TOKEN"],
       [e.MAIL_PROVIDER === "resend", "RESEND_API_KEY"],

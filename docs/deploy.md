@@ -17,6 +17,7 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
 | Service | Where | Env variables |
 |---|---|---|
 | Anthropic | console.anthropic.com, API keys. Set a spend limit there too. | `ANTHROPIC_API_KEY` |
+| Google AI Studio | aistudio.google.com/apikey, create an API key (free tier, see "Free tier: Google Gemini" below). Alternative to Anthropic. | `GOOGLE_GENERATIVE_AI_API_KEY` |
 | Voyage AI | dash.voyageai.com, API keys. Add a payment method: without one the account is limited to 3 requests per minute, too few for ingest (the free token allowance still applies once a card is on file). | `VOYAGE_API_KEY` |
 | Adzuna | developer.adzuna.com, free app id and key (optional; the source is skipped without them) | `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` |
 | Resend | resend.com: add and verify a sending domain (DNS records), then create an API key | `RESEND_API_KEY`, `EMAIL_FROM` |
@@ -41,8 +42,9 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
    | `DIRECT_DATABASE_URL` | Neon direct (unpooled) URL, for migrations |
    | `APP_URL` | Your production URL, for example `https://your-app.vercel.app` (no trailing slash) |
    | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` (at least 32 chars) |
-   | `AI_PROVIDER` | `anthropic` |
-   | `ANTHROPIC_API_KEY` | from step 2 |
+   | `AI_PROVIDER` | `anthropic`, or `google` for Gemini |
+   | `ANTHROPIC_API_KEY` | from step 2 (when `AI_PROVIDER=anthropic`) |
+   | `GOOGLE_GENERATIVE_AI_API_KEY` | from step 2 (when `AI_PROVIDER=google`) |
    | `EMBEDDINGS_PROVIDER` | `voyage` |
    | `VOYAGE_API_KEY` | from step 2 |
    | `STORAGE_PROVIDER` | `vercel-blob` |
@@ -58,6 +60,14 @@ Target setup: Neon (Postgres + pgvector), Vercel (app + Blob), GitHub Actions (s
 
    `NEXT_PUBLIC_*` values are inlined at build time, so redeploy after changing the site key.
 5. Deploy.
+
+### Free tier: Google Gemini
+
+Setting `AI_PROVIDER=google` runs the app on the Gemini API free tier (`gemini-3.5-flash-lite` for extraction and re-rank, `gemini-3.6-flash` for CV analysis and letters), so no Anthropic account is needed.
+
+- On the free tier Google may use prompts and responses to improve its products. That includes the text of uploaded CVs, so tell users before enabling it for real people, or use a paid Gemini key (which is not used for training).
+- In AI Studio, confirm that the free tier is available for your account and region, and check the rate limits shown there for these two models; a limit that is too low shows up as failed AI calls.
+- The free tier bills $0, but the app still records a cost from Gemini's paid list prices (`src/server/ai/models.ts`), so `GLOBAL_DAILY_AI_BUDGET_USD` keeps working as an abuse cap.
 
 ## 4. GitHub Actions secrets
 
